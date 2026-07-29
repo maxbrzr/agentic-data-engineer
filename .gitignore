@@ -1,0 +1,22 @@
+data/
+output/
+.venv/
+.uv-cache/
+.jupyter-config/
+.matplotlib-cache/
+.ipynb_checkpoints/
+
+__pycache__/
+*.py[cod]
+
+.DS_Store
+
+.env
+.env.*
+
+.opencode/node_modules/
+.opencode/package.json
+.opencode/package-lock.json
+.opencode/bun.lock
+# Local opencode run logs/reports
+output/opencode_*
