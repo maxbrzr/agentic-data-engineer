@@ -13,6 +13,7 @@ MANAGED_OPENCODE_URLS = {
     "http://127.0.0.1:54321",
     "http://localhost:54321",
 }
+SANDBOX_ATTESTATION_VERSION = 2
 
 
 def read_sandbox_attestation(
@@ -24,6 +25,10 @@ def read_sandbox_attestation(
         marker = json.load(response)
     if not isinstance(marker, dict):
         raise TypeError("sandbox attestation must be a JSON object")
+    if marker.get("version") != SANDBOX_ATTESTATION_VERSION:
+        raise ValueError(
+            "sandbox attestation version is stale; rebuild the Docker sandbox"
+        )
 
     output_value = marker.get("output_dir")
     probe_name = marker.get("probe_name")
@@ -76,9 +81,8 @@ class OpencodeSandboxManager:
         self.base_url = self.base_url.rstrip("/")
         if self.base_url not in MANAGED_OPENCODE_URLS:
             raise ValueError(
-                "Automatic OpenCode sandbox management only supports the local "
-                "Compose endpoint http://127.0.0.1:54321. Pass "
-                "`--no-manage-opencode-sandbox` for an externally managed server."
+                "OpenCode is Docker-only and must use the local Compose endpoint "
+                "http://127.0.0.1:54321."
             )
         if self.attestation_url is None:
             self.attestation_url = (
@@ -130,7 +134,8 @@ class OpencodeSandboxManager:
             return False
 
         return (
-            marker.get("example_key") == example_key
+            marker.get("version") == SANDBOX_ATTESTATION_VERSION
+            and marker.get("example_key") == example_key
             and self._path(marker.get("data_root")) == expected_data
             and self._path(marker.get("output_dir")) == expected_output
             and marker.get("data_read_only") is True

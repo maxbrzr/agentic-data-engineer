@@ -55,12 +55,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--prompt",
         type=Path,
-        help="Agent prompt path. Defaults to .opencode/agents/Agent.md in the workspace.",
+        help="Agent prompt path. Defaults to prompts/data-engineer.md in the workspace.",
     )
     parser.add_argument(
         "--opencode-url",
         default=os.getenv("OPENCODE_BASE_URL", "http://127.0.0.1:54321"),
-        help="OpenCode server URL; used only by the OpenCode adapter.",
+        help="Local Docker OpenCode endpoint; used only by the OpenCode adapter.",
     )
     parser.add_argument(
         "--opencode-max-continuations",
@@ -89,14 +89,6 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
-        "--skip-opencode-sandbox-check",
-        action="store_true",
-        help=(
-            "Allow a direct host OpenCode server without the container mount "
-            "preflight. This also disables automatic sandbox management."
-        ),
-    )
-    parser.add_argument(
         "--force-download",
         action="store_true",
         help="Ask dcat-ap-hub to download files again.",
@@ -116,7 +108,6 @@ def _create_harness(
     max_continuations: int,
     provider_retries: int,
     retry_backoff_seconds: float,
-    require_sandbox_preflight: bool,
 ):
     if name != "opencode":
         raise ValueError(
@@ -132,7 +123,7 @@ def _create_harness(
             max_continuations=max_continuations,
             max_provider_retries=provider_retries,
             retry_backoff_seconds=retry_backoff_seconds,
-            require_sandbox_preflight=require_sandbox_preflight,
+            require_sandbox_preflight=True,
         )
     )
 
@@ -151,23 +142,20 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     workspace_root = args.workspace_root.expanduser().resolve()
     sandbox_manager = None
-    manage_sandbox = (
-        args.harness == "opencode"
-        and not args.no_manage_opencode_sandbox
-        and not args.skip_opencode_sandbox_check
-    )
-    if manage_sandbox:
+    if args.harness == "opencode":
         from .agent.opencode_sandbox import OpencodeSandboxManager
 
         try:
-            sandbox_manager = OpencodeSandboxManager(
+            configured_sandbox = OpencodeSandboxManager(
                 project_root=workspace_root,
                 base_url=args.opencode_url,
             )
         except ValueError as exc:
             parser.error(str(exc))
+        if not args.no_manage_opencode_sandbox:
+            sandbox_manager = configured_sandbox
 
-    prompt_path = args.prompt or workspace_root / ".opencode" / "agents" / "Agent.md"
+    prompt_path = args.prompt or workspace_root / "prompts" / "data-engineer.md"
     config = PipelineConfig(
         workspace_root=workspace_root,
         prompt_path=prompt_path,
@@ -182,7 +170,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             max_continuations=args.opencode_max_continuations,
             provider_retries=args.opencode_provider_retries,
             retry_backoff_seconds=args.opencode_retry_backoff,
-            require_sandbox_preflight=not args.skip_opencode_sandbox_check,
         ),
         metadata_generator=CroissantBakerMetadataGenerator(),
         config=config,

@@ -16,7 +16,16 @@ PROBE_NAME = ".opencode-sandbox-live-probe"
 
 class AttestationHandler(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
-        if self.path.split("?", 1)[0] != "/agentic-data-engineer-sandbox.json":
+        route = self.path.split("?", 1)[0]
+        if route == "/health":
+            payload = b'{"healthy":true}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+        if route != "/agentic-data-engineer-sandbox.json":
             self.send_error(404)
             return
 

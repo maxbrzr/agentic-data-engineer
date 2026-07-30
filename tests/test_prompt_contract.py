@@ -3,7 +3,7 @@ from pathlib import Path
 
 
 PROMPT_PATH = (
-    Path(__file__).resolve().parents[1] / ".opencode" / "agents" / "Agent.md"
+    Path(__file__).resolve().parents[1] / "prompts" / "data-engineer.md"
 )
 
 

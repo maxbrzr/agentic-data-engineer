@@ -17,6 +17,11 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertIn("scikit-learn==1.9.0", dockerfile)
         self.assertNotIn("croissant-baker", dockerfile)
         self.assertIn("USER node", dockerfile)
+        self.assertIn(
+            "COPY docker/opencode-sandbox/opencode.json /etc/opencode/opencode.json",
+            dockerfile,
+        )
+        self.assertIn("OPENCODE_CONFIG=/etc/opencode/opencode.json", dockerfile)
         self.assertIn('ENTRYPOINT ["opencode-sandbox-entrypoint"]', dockerfile)
 
         entrypoint = (
@@ -35,12 +40,12 @@ class SandboxConfigurationTests(unittest.TestCase):
             'source: "${ADE_ROOT}"\n        target: "${ADE_ROOT}"',
             compose,
         )
-        self.assertIn(
+        self.assertNotIn('source: "${ADE_ROOT}/.opencode', compose)
+        self.assertNotIn(
             'source: "${ADE_ROOT}/docker/opencode-sandbox/opencode.json"',
             compose,
         )
-        self.assertIn('source: "${ADE_ROOT}/.opencode/agents"', compose)
-        self.assertIn('source: "${ADE_ROOT}/.opencode/.gitignore"', compose)
+        self.assertIn("OPENCODE_CONFIG: /etc/opencode/opencode.json", compose)
         self.assertNotIn("${ADE_ROOT}:rw,nosuid", compose)
         self.assertIn(
             'source: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"',
@@ -50,7 +55,8 @@ class SandboxConfigurationTests(unittest.TestCase):
             'source: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"',
             compose,
         )
-        self.assertGreaterEqual(compose.count("read_only: true"), 3)
+        # One read-only data bind plus the service's read-only root filesystem.
+        self.assertEqual(2, compose.count("read_only: true"))
         self.assertIn('"127.0.0.1:54321:54321"', compose)
         self.assertIn('"127.0.0.1:54322:54322"', compose)
         self.assertIn("no-new-privileges:true", compose)
@@ -66,18 +72,15 @@ class SandboxConfigurationTests(unittest.TestCase):
             compose,
         )
         self.assertIn(
-            "54322/agentic-data-engineer-sandbox.json",
+            "54322/health",
             compose,
         )
 
         container_config = (
             ROOT / "docker" / "opencode-sandbox" / "opencode.json"
         ).read_text(encoding="utf-8")
-        host_config = (ROOT / ".opencode" / "opencode.json").read_text(
-            encoding="utf-8"
-        )
         self.assertIn('"external_directory": "allow"', container_config)
-        self.assertIn('"external_directory": "deny"', host_config)
+        self.assertFalse((ROOT / ".opencode").exists())
 
     def test_launcher_only_accepts_enabled_examples(self):
         launcher = (ROOT / "scripts" / "opencode-sandbox").read_text(
@@ -101,6 +104,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         self.assertIn("--no-manage-opencode-sandbox", cli)
+        self.assertNotIn("--skip-opencode-sandbox-check", cli)
         self.assertIn("sandbox_manager.ensure(key)", cli)
 
 

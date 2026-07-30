@@ -15,10 +15,6 @@ __pycache__/
 .env.*
 .env.opencode
 
-.opencode/node_modules/
-.opencode/package.json
-.opencode/package-lock.json
-.opencode/bun.lock
 # Local opencode run logs/reports
 output/opencode_*
 

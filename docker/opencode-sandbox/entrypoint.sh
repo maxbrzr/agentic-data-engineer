@@ -38,7 +38,7 @@ import os
 from pathlib import Path
 
 marker = {
-    "version": 1,
+    "version": 2,
     "example_key": os.environ["ADE_EXAMPLE_KEY"],
     "data_root": os.environ["ADE_DATA_ROOT"],
     "output_dir": os.environ["ADE_OUTPUT_DIR"],

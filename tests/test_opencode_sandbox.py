@@ -28,6 +28,7 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
             response = io.BytesIO(
                 json.dumps(
                     {
+                        "version": 2,
                         "output_dir": str(output_dir),
                         "probe_name": probe.name,
                         "probe_token": "matching-token",
@@ -53,6 +54,7 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
             response = io.BytesIO(
                 json.dumps(
                     {
+                        "version": 2,
                         "output_dir": str(output_dir),
                         "probe_name": ".opencode-sandbox-live-probe",
                         "probe_token": "container-only-token",
@@ -70,12 +72,37 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
                         output_dir,
                     )
 
+    def test_attestation_rejects_previous_container_layout(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir).resolve()
+            response = io.BytesIO(
+                json.dumps(
+                    {
+                        "version": 1,
+                        "output_dir": str(output_dir),
+                        "probe_name": ".opencode-sandbox-live-probe",
+                        "probe_token": "old-container",
+                    }
+                ).encode("utf-8")
+            )
+
+            with patch(
+                "agentic_data_engineer.agent.opencode_sandbox.urlopen",
+                return_value=response,
+            ):
+                with self.assertRaisesRegex(ValueError, "version is stale"):
+                    read_sandbox_attestation(
+                        "http://127.0.0.1:54322/marker",
+                        output_dir,
+                    )
+
     def test_matching_sandbox_is_reused_without_starting_compose(self):
         runner_calls = []
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
             marker = {
+                "version": 2,
                 "example_key": "chemical-process-safety",
                 "data_root": str(root / "data" / "chemical-process-safety"),
                 "output_dir": str(root / "output" / "chemical-process-safety"),
@@ -101,6 +128,7 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
             marker = {
+                "version": 2,
                 "example_key": "chemical-process-safety",
                 "data_root": str(root / "data" / "chemical-process-safety"),
                 "output_dir": str(root / "output" / "chemical-process-safety"),
@@ -167,11 +195,11 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
             ):
                 manager.ensure("chemical-process-safety")
 
-    def test_custom_server_requires_management_opt_out(self):
+    def test_custom_server_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaisesRegex(
                 ValueError,
-                r"--no-manage-opencode-sandbox",
+                r"OpenCode is Docker-only",
             ):
                 OpencodeSandboxManager(
                     project_root=Path(temp_dir),

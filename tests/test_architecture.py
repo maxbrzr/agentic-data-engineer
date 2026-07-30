@@ -600,7 +600,7 @@ class OpencodeAdapterTests(unittest.TestCase):
         def read_attestation(url, _expected_output):
             attestation_reads.append(url)
             return {
-                "version": 1,
+                "version": 2,
                 "example_key": "chemical-process-safety",
                 "data_root": str(data_root),
                 "output_dir": str(artifact_dir),
@@ -671,7 +671,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             root = Path(temp_dir).resolve()
             marker.update(
                 {
-                    "version": 1,
+                    "version": 2,
                     "example_key": "tcm-predictive-maintenance",
                     "data_root": str(
                         root / "data" / "tcm-predictive-maintenance"

@@ -11,6 +11,7 @@ from ..contracts import AgentRequest, AgentRunResult, ModelConfig
 from .opencode_logging import save_session_messages, watch_session_events
 from .opencode_sandbox import (
     AttestationReader,
+    SANDBOX_ATTESTATION_VERSION,
     read_sandbox_attestation,
 )
 
@@ -215,9 +216,7 @@ class OpencodeHarness:
                 "OpenCode sandbox preflight failed before an agent session was "
                 "created. The localhost sandbox attestation endpoint did not "
                 "expose a valid mount marker. Start the matching container with "
-                f"`./scripts/opencode-sandbox start {expected_key}`. If you "
-                "intentionally run OpenCode directly on the host, pass "
-                "`--skip-opencode-sandbox-check`."
+                f"`./scripts/opencode-sandbox start {expected_key}`."
             ) from exc
 
         actual_key = marker.get("example_key")
@@ -225,6 +224,10 @@ class OpencodeHarness:
         actual_data_root = self._marker_path(marker, "data_root")
         problems: list[str] = []
 
+        if marker.get("version") != SANDBOX_ATTESTATION_VERSION:
+            problems.append(
+                "container attestation version is stale; rebuild the sandbox"
+            )
         if actual_key != expected_key:
             problems.append(
                 f"container example is {actual_key!r}, requested {expected_key!r}"

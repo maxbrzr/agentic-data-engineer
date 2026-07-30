@@ -24,13 +24,15 @@ RUN python3 -m venv /opt/agent-runtime \
 
 COPY src ./src
 COPY docker/opencode-sandbox/attestation_server.py ./attestation_server.py
+COPY docker/opencode-sandbox/opencode.json /etc/opencode/opencode.json
 COPY docker/opencode-sandbox/entrypoint.sh /usr/local/bin/opencode-sandbox-entrypoint
 
 RUN chmod 0555 /usr/local/bin/opencode-sandbox-entrypoint
 
 ENV PATH="/opt/agent-runtime/bin:${PATH}" \
     PYTHONPATH="/opt/agentic-data-engineer/src" \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    OPENCODE_CONFIG=/etc/opencode/opencode.json
 
 USER node
 
