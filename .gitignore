@@ -13,6 +13,7 @@ __pycache__/
 
 .env
 .env.*
+.env.opencode
 
 .opencode/node_modules/
 .opencode/package.json
@@ -20,3 +21,5 @@ __pycache__/
 .opencode/bun.lock
 # Local opencode run logs/reports
 output/opencode_*
+
+API-GWDG.md

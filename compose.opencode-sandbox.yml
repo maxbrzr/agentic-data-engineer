@@ -1,0 +1,73 @@
+services:
+  opencode:
+    build:
+      context: .
+      dockerfile: docker/opencode-sandbox/Dockerfile
+      args:
+        OPENCODE_VERSION: "${OPENCODE_VERSION:-1.18.9}"
+    init: true
+    user: "${ADE_UID:-1000}:${ADE_GID:-1000}"
+    working_dir: "${ADE_ROOT:?Set ADE_ROOT to the absolute repository path}"
+    command:
+      - opencode
+      - serve
+      - --hostname
+      - 0.0.0.0
+      - --port
+      - "54321"
+    environment:
+      HOME: /tmp/opencode-home
+      XDG_CACHE_HOME: /tmp/opencode-cache
+      XDG_DATA_HOME: /tmp/opencode-data
+      XDG_STATE_HOME: /tmp/opencode-state
+      OPENCODE_CONFIG: "${ADE_ROOT}/.opencode/opencode.json"
+      ADE_EXAMPLE_KEY: "${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+      ADE_DATA_ROOT: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+      ADE_OUTPUT_DIR: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+      ADE_SANDBOX_MARKER: /tmp/agentic-data-engineer-sandbox.json
+    env_file:
+      - path: .env.opencode
+        required: false
+    ports:
+      - "127.0.0.1:54321:54321"
+      - "127.0.0.1:54322:54322"
+    volumes:
+      # Preserve the absolute paths sent by the host pipeline. These are direct,
+      # non-nested bind mounts; the host repository itself is not mounted.
+      - type: bind
+        source: "${ADE_ROOT}/docker/opencode-sandbox/opencode.json"
+        target: "${ADE_ROOT}/.opencode/opencode.json"
+        read_only: true
+      - type: bind
+        source: "${ADE_ROOT}/.opencode/agents"
+        target: "${ADE_ROOT}/.opencode/agents"
+        read_only: true
+      - type: bind
+        source: "${ADE_ROOT}/.opencode/.gitignore"
+        target: "${ADE_ROOT}/.opencode/.gitignore"
+        read_only: true
+      - type: bind
+        source: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+        target: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+        read_only: true
+      - type: bind
+        source: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+        target: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,size=1g,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "Promise.all([fetch('http://127.0.0.1:54321/global/health'),fetch('http://127.0.0.1:54322/agentic-data-engineer-sandbox.json')]).then(rs=>{if(rs.some(r=>!r.ok))process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 10s

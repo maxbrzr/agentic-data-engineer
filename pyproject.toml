@@ -1,21 +1,30 @@
 [project]
 name = "agentic-data-engineer"
 version = "0.1.0"
-description = "Add your description here"
+description = "Harness- and model-agnostic pipeline for making DCAT-AP tabular datasets ML-ready"
 readme = "README.md"
 authors = [
     { name = "maxbrzr", email = "maximilian.burzer@kit.edu" }
 ]
 requires-python = ">=3.12"
 dependencies = [
+    "croissant-baker>=0.3.2,<0.4.0",
     "dcat-ap-hub>=0.1.4",
     "ipykernel>=7.3.0",
     "matplotlib>=3.11.0",
-    "mlcroissant>=1.1.0",
+    "mlcroissant>=1.1.0,<1.2.0",
     "numpy>=2.5.0",
     "opencode-ai>=0.1.0a36",
     "pandas>=3.0.3",
 ]
+
+[project.optional-dependencies]
+opencode = [
+    "opencode-ai>=0.1.0a36",
+]
+
+[project.scripts]
+agentic-data-engineer = "agentic_data_engineer.cli:main"
 
 [build-system]
 requires = ["hatchling"]

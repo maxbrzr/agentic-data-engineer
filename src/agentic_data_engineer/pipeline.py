@@ -1,80 +1,97 @@
-from pathlib import Path
-import sys
+from collections.abc import Iterable
 
-from opencode_ai import Opencode
-from threading import Thread
-
-#TODO: readme doku
-#TODO: Docker ->?
-#TODO: !NICHT alles Zeitreihen
-# Später: -> #TODO: wie gehen wir mit Images, Tabular, Texten um... 
-
-
-#TODO: mehr Datensätze Testen
-#TODO: mehr Tests. 
-#TODO: wenn ich für den gleichen Datensatz nochmal -> alte raus
-#TODO: wie siehts mit Downloads aus -> Queue 
-#TODO: wie siehts mit Uploads aus 
-#TODO: genauer gucken, wie "Reasoning aussehen wird"
-
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from engine.downloadingUploading import download_dataset, create_parser_file
-from engine.opencode_logging import save_session_messages, watch_session_events
-
-BASE_URL_OPENCODE = "http://127.0.0.1:54321"
-
-client = Opencode(base_url=BASE_URL_OPENCODE)
-system_prompt = (PROJECT_ROOT / ".opencode" / "agents" / "Agent.md").read_text(
-    encoding="utf-8"
+from .config import PipelineConfig
+from .contracts import (
+    AgentHarness,
+    AgentRequest,
+    DatasetMetadataGenerator,
+    DatasetRetriever,
+    PipelineRunResult,
 )
-
-output_dir = PROJECT_ROOT / "output"
-session = client.session.create()
-
-def run_pipeline():
-    #hier vielleicht sowas wie "pop-queue"....
-    data_dir = download_dataset("https://ki-daten.hlrs.de/de/dataset/10-5281-zenodo-13808085")
-
-    watcher = Thread(
-        target=watch_session_events,
-        args=(BASE_URL_OPENCODE, session.id, output_dir),
-        daemon=True,
-    )
-    watcher.start()
-
-    response = client.session.chat(
-        session.id,
-        provider_id="opencode",
-        model_id="deepseek-v4-flash-free",
-        mode="Agent",
-        system=system_prompt,
-        timeout= 1200,
-        parts=[
-            {
-                "type": "text",
-                "text": (
-                    f"Befolge den System- und Agent-Prompt vollständig. Dein aktueller Datensatz liegt in {data_dir}. "
-                    f"Schreibe alle erzeugten Dateien in {output_dir}. "
-                    f"Führe den Auftrag aus: analysiere {data_dir}, schreibe {output_dir / 'parser.py'} "
-                    "und validiere den Parser."
-                ),
-            }
-        ],
-    )
-
-    print("session_id:", session.id)
-    print("message_id:", response.id)
-    print(response)
-
-    watcher.join(timeout=5)
-
-    saved_paths = save_session_messages(client, session.id, output_dir)
-    print("opencode run log:", saved_paths["run_log"])
-    print("opencode report:", saved_paths["report"])
+from .retrieval import get_example, list_examples
 
 
-run_pipeline()
+class DataEngineeringPipeline:
+    """Harness- and model-neutral orchestration for retrieval and processing."""
+
+    def __init__(
+        self,
+        *,
+        retriever: DatasetRetriever,
+        harness: AgentHarness,
+        metadata_generator: DatasetMetadataGenerator,
+        config: PipelineConfig,
+    ) -> None:
+        self.retriever = retriever
+        self.harness = harness
+        self.metadata_generator = metadata_generator
+        self.config = config
+
+    def run(self, example_key: str, *, force_download: bool | None = None) -> PipelineRunResult:
+        spec = get_example(example_key)
+        retrieved = self.retriever.retrieve(
+            spec,
+            self.config.data_root,
+            force=self.config.force_download if force_download is None else force_download,
+        )
+        self.metadata_generator.preflight(retrieved)
+
+        output_dir = self.config.output_root / spec.key
+        output_dir.mkdir(parents=True, exist_ok=True)
+        request = AgentRequest(
+            dataset=retrieved,
+            output_dir=output_dir,
+            system_prompt=self.config.load_system_prompt(),
+            task_prompt=self._build_task_prompt(retrieved.data_dir, output_dir),
+        )
+        agent_result = self.harness.run(request, self.config.model)
+        self._require_agent_outputs(output_dir, agent_result.run_id)
+        metadata_result = self.metadata_generator.generate(retrieved, output_dir)
+        return PipelineRunResult(
+            dataset=retrieved,
+            agent=agent_result,
+            metadata=metadata_result,
+        )
+
+    def run_examples(
+        self,
+        example_keys: Iterable[str] | None = None,
+        *,
+        force_download: bool | None = None,
+    ) -> tuple[PipelineRunResult, ...]:
+        keys = (
+            tuple(example_keys)
+            if example_keys is not None
+            else tuple(spec.key for spec in list_examples())
+        )
+        return tuple(
+            self.run(key, force_download=force_download)
+            for key in keys
+        )
+
+    @staticmethod
+    def _build_task_prompt(data_dir, output_dir) -> str:
+        return (
+            "Follow the system instructions completely. "
+            f"The read-only local dataset is in {data_dir}. "
+            f"Write every generated artifact to {output_dir}. "
+            f"Analyze the dataset, create the reusable parser at {output_dir / 'parser.py'}, "
+            "run all applicable tabular validations, and export validated train/test "
+            "splits. The pipeline generates and validates croissant.json after your run; "
+            "do not create or edit that file. Do not report success unless parser.py, "
+            "train.csv, and test.csv exist and every applicable tabular validation passes."
+        )
+
+    @staticmethod
+    def _require_agent_outputs(output_dir, run_id: str) -> None:
+        """Reject harness completion unless required artifacts reached the host."""
+        missing = [
+            name
+            for name in ("parser.py", "train.csv", "test.csv")
+            if not (output_dir / name).is_file()
+        ]
+        if missing:
+            raise ValueError(
+                f"Agent run {run_id!r} reported completion, but required host "
+                f"artifacts are missing from {output_dir}: {missing}."
+            )

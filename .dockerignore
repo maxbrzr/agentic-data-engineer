@@ -1,0 +1,10 @@
+*
+!README.md
+!pyproject.toml
+!uv.lock
+!src/
+!src/**
+!docker/
+!docker/opencode-sandbox/
+!docker/opencode-sandbox/entrypoint.sh
+!docker/opencode-sandbox/attestation_server.py

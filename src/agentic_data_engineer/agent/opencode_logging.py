@@ -31,7 +31,7 @@ def _write_json(path: Path, value: Any) -> None:
 
 def _short_path(value: Any, max_len: int = 96) -> str:
     text = str(value or "")
-    marker = "/agenticTSParser/"
+    marker = "/agentic-data-engineer/"
     if marker in text:
         text = text.split(marker, 1)[1]
     if len(text) <= max_len:
@@ -140,7 +140,7 @@ def _build_session_report(messages: Any, session_id: str) -> tuple[str, list[dic
             if part_type == "text":
                 text = _part_text(part)
                 if text:
-                    lines.extend(["**Antwort**", "", text, ""])
+                    lines.extend(["**Response**", "", text, ""])
 
             elif part_type == "reasoning":
                 text = _part_text(part)
@@ -156,7 +156,7 @@ def _build_session_report(messages: Any, session_id: str) -> tuple[str, list[dic
                 icon = {"completed": "✓", "error": "✗", "running": "→", "pending": "…"}.get(status, "-")
                 lines.append(f"- {icon} `{record['tool']}`: {record['label']} ({status})")
                 if status == "error" and record.get("error"):
-                    lines.append(f"  - Fehler: `{record['error']}`")
+                    lines.append(f"  - Error: `{record['error']}`")
                 if status == "completed" and record.get("output"):
                     output = str(record["output"]).strip()
                     if output:
@@ -196,19 +196,33 @@ def _build_session_report(messages: Any, session_id: str) -> tuple[str, list[dic
 
 
 
-def watch_session_events(base_url: str, session_id: str, output_dir: Path) -> None:
+def watch_session_events(
+    base_url: str,
+    session_id: str,
+    output_dir: Path,
+    *,
+    client_factory=Opencode,
+    append: bool = False,
+    attempt_label: str | None = None,
+) -> None:
     """Stream opencode events, print useful progress, and persist a readable run log."""
     output_dir.mkdir(parents=True, exist_ok=True)
     run_log = output_dir / f"opencode_run_{session_id}.log"
-    event_client = Opencode(base_url=base_url)
+    event_client = client_factory(base_url=base_url)
 
     seen_text: dict[str, str] = {}
     seen_tool_status: dict[str, str] = {}
     printed_completed_tools: set[str] = set()
 
-    with run_log.open("w", encoding="utf-8") as log_file:
-        _write_log_line(log_file, f"Opencode run log: {session_id}")
-        _write_log_line(log_file, f"Started: {datetime.now().isoformat(timespec='seconds')}")
+    with run_log.open("a" if append else "w", encoding="utf-8") as log_file:
+        if not append:
+            _write_log_line(log_file, f"Opencode run log: {session_id}")
+            _write_log_line(
+                log_file,
+                f"Started: {datetime.now().isoformat(timespec='seconds')}",
+            )
+        if attempt_label:
+            _write_log_line(log_file, f"\n[{attempt_label}]")
         _write_log_line(log_file)
 
         for event in event_client.event.list(timeout=None):
@@ -275,6 +289,7 @@ def watch_session_events(base_url: str, session_id: str, output_dir: Path) -> No
                     line = f"\n[session error] {getattr(properties, 'error', None)}"
                     print(line, flush=True)
                     _write_log_line(log_file, line)
+                    break
 
             elif event_type == "session.idle":
                 if getattr(properties, "session_id", None) == session_id:
@@ -284,7 +299,10 @@ def watch_session_events(base_url: str, session_id: str, output_dir: Path) -> No
                     break
 
         _write_log_line(log_file)
-        _write_log_line(log_file, f"Finished: {datetime.now().isoformat(timespec='seconds')}")
+        _write_log_line(
+            log_file,
+            f"Attempt stream closed: {datetime.now().isoformat(timespec='seconds')}",
+        )
 
 
 def save_session_messages(client: Opencode, session_id: str, output_dir: Path) -> dict[str, Path]:
@@ -297,5 +315,10 @@ def save_session_messages(client: Opencode, session_id: str, output_dir: Path) -
 
     report, _tools = _build_session_report(messages, session_id)
     report_path.write_text(report, encoding="utf-8")
+    with run_log_path.open("a", encoding="utf-8") as log_file:
+        _write_log_line(
+            log_file,
+            f"\nFinished: {datetime.now().isoformat(timespec='seconds')}",
+        )
 
     return {"run_log": run_log_path, "report": report_path}

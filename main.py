@@ -1,6 +1,5 @@
-def main():
-    print("Hello from parser-writer!")
+from agentic_data_engineer.cli import main
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
