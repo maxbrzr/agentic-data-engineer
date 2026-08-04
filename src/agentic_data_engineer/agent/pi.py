@@ -8,8 +8,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from threading import Thread
-from time import monotonic
-from time import sleep
+from time import monotonic, sleep
 from typing import Any
 from uuid import uuid4
 
@@ -490,9 +489,7 @@ class PiHarness:
 
     @staticmethod
     def _missing_outputs(output_dir: Path) -> list[str]:
-        return [
-            name for name in REQUIRED_OUTPUTS if not (output_dir / name).is_file()
-        ]
+        return [name for name in REQUIRED_OUTPUTS if not (output_dir / name).is_file()]
 
     @staticmethod
     def _continuation_prompt(output_dir: Path, missing: list[str]) -> str:
