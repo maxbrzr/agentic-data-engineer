@@ -1,4 +1,10 @@
+import hashlib
+import json
+import re
 from collections.abc import Iterable
+from datetime import UTC, datetime
+from pathlib import Path
+from uuid import uuid4
 
 from .config import PipelineConfig
 from .contracts import (
@@ -36,8 +42,9 @@ class DataEngineeringPipeline:
         )
         self.metadata_generator.preflight(retrieved)
 
-        output_dir = self.config.output_root / spec.key
-        output_dir.mkdir(parents=True, exist_ok=True)
+        output_dir = self._create_run_output_dir(spec.key)
+        provenance_path = output_dir / "provenance.json"
+        provenance_path.unlink(missing_ok=True)
         request = AgentRequest(
             dataset=retrieved,
             output_dir=output_dir,
@@ -47,10 +54,17 @@ class DataEngineeringPipeline:
         agent_result = self.harness.run(request, self.config.model)
         self._require_agent_outputs(output_dir, agent_result.run_id)
         metadata_result = self.metadata_generator.generate(retrieved, output_dir)
+        self._write_provenance(
+            provenance_path,
+            retrieved,
+            agent_result,
+            metadata_result,
+        )
         return PipelineRunResult(
             dataset=retrieved,
             agent=agent_result,
             metadata=metadata_result,
+            provenance_path=provenance_path,
         )
 
     def run_examples(
@@ -82,6 +96,20 @@ class DataEngineeringPipeline:
             "train.csv, and test.csv exist and every applicable tabular validation passes."
         )
 
+    def _create_run_output_dir(self, example_key: str) -> Path:
+        timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        provider = self._path_component(self.config.model.provider_id)
+        model = self._path_component(self.config.model.model_id)
+        run_name = f"{timestamp}__{provider}__{model}__{uuid4().hex[:8]}"
+        output_dir = self.config.output_root / example_key / "runs" / run_name
+        output_dir.mkdir(parents=True, exist_ok=False)
+        return output_dir
+
+    @staticmethod
+    def _path_component(value: str) -> str:
+        component = re.sub(r"[^A-Za-z0-9._-]+", "-", value).strip("-.")
+        return (component or "unnamed")[:80]
+
     @staticmethod
     def _require_agent_outputs(output_dir, run_id: str) -> None:
         """Reject harness completion unless required artifacts reached the host."""
@@ -95,3 +123,80 @@ class DataEngineeringPipeline:
                 f"Agent run {run_id!r} reported completion, but required host "
                 f"artifacts are missing from {output_dir}: {missing}."
             )
+
+    def _write_provenance(
+        self,
+        path: Path,
+        dataset,
+        agent_result,
+        metadata_result,
+    ) -> None:
+        model = self.config.model
+        agent_identity = {
+            "harness": agent_result.harness,
+            "provider": model.provider_id,
+            "model": model.model_id,
+            "run_id": agent_result.run_id,
+            "message_id": agent_result.message_id,
+        }
+        artifacts: dict[str, dict] = {}
+        for name in ("parser.py", "train.csv", "test.csv"):
+            artifact_path = path.parent / name
+            artifacts[name] = {
+                "producer_type": "agent",
+                **agent_identity,
+                "sha256": self._sha256(artifact_path),
+            }
+
+        for role, metadata_key in (
+            ("run_log", "run_log"),
+            ("run_report", "report"),
+        ):
+            value = agent_result.metadata.get(metadata_key)
+            if not isinstance(value, str):
+                continue
+            artifact_path = Path(value).expanduser().resolve()
+            if not artifact_path.is_file() or artifact_path.parent != path.parent:
+                continue
+            artifacts[artifact_path.name] = {
+                "producer_type": "harness",
+                "artifact_role": role,
+                **agent_identity,
+                "sha256": self._sha256(artifact_path),
+            }
+
+        metadata_path = metadata_result.path.expanduser().resolve()
+        artifacts[metadata_path.name] = {
+            "producer_type": "metadata_generator",
+            "generator": metadata_result.generator,
+            "derived_from_agent_run": agent_identity,
+            "sha256": self._sha256(metadata_path),
+        }
+
+        document = {
+            "created_at_utc": datetime.now(UTC).isoformat(),
+            "dataset": {
+                "key": dataset.spec.key,
+                "title": dataset.spec.title,
+                "catalog_url": dataset.spec.url,
+            },
+            "agent_run": agent_identity,
+            "artifacts": artifacts,
+        }
+        temporary_path = path.with_name(f".{path.name}.tmp")
+        try:
+            temporary_path.write_text(
+                json.dumps(document, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+            temporary_path.replace(path)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as stream:
+            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()

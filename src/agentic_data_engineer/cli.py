@@ -33,17 +33,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--harness",
+        choices=("opencode", "pi"),
         default="opencode",
-        help="Installed harness adapter to use (currently: opencode).",
+        help="Agent harness to run in Docker (opencode or pi).",
     )
     parser.add_argument(
         "--provider",
-        default=os.getenv("AGENT_MODEL_PROVIDER", "opencode"),
+        default=os.getenv("AGENT_MODEL_PROVIDER"),
         help="Model provider ID passed unchanged to the selected harness.",
     )
     parser.add_argument(
         "--model",
-        default=os.getenv("AGENT_MODEL_ID", "deepseek-v4-flash-free"),
+        default=os.getenv("AGENT_MODEL_ID"),
         help="Model ID passed unchanged to the selected harness.",
     )
     parser.add_argument(
@@ -89,6 +90,36 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--pi-max-continuations",
+        type=int,
+        default=int(os.getenv("PI_MAX_CONTINUATIONS", "2")),
+        help="Maximum follow-up Pi invocations when required outputs are missing.",
+    )
+    parser.add_argument(
+        "--pi-provider-retries",
+        type=int,
+        default=int(os.getenv("PI_PROVIDER_RETRIES", "2")),
+        help="Maximum retries for transient Pi model-provider failures per turn.",
+    )
+    parser.add_argument(
+        "--pi-retry-backoff",
+        type=float,
+        default=float(os.getenv("PI_RETRY_BACKOFF_SECONDS", "2")),
+        help="Initial Pi provider-retry backoff in seconds.",
+    )
+    parser.add_argument(
+        "--pi-timeout",
+        type=float,
+        default=float(os.getenv("PI_TIMEOUT_SECONDS", "1200")),
+        help="Timeout in seconds for each Pi container invocation.",
+    )
+    parser.add_argument(
+        "--pi-stall-timeout",
+        type=float,
+        default=float(os.getenv("PI_STALL_TIMEOUT_SECONDS", "60")),
+        help="Abort and retry when Pi emits no output for this many seconds.",
+    )
+    parser.add_argument(
         "--force-download",
         action="store_true",
         help="Ask dcat-ap-hub to download files again.",
@@ -105,15 +136,31 @@ def _create_harness(
     name: str,
     opencode_url: str,
     *,
+    workspace_root: Path,
     max_continuations: int,
     provider_retries: int,
     retry_backoff_seconds: float,
+    pi_max_continuations: int,
+    pi_provider_retries: int,
+    pi_retry_backoff_seconds: float,
+    pi_timeout_seconds: float,
+    pi_stall_timeout_seconds: float,
 ):
-    if name != "opencode":
-        raise ValueError(
-            f"No adapter is installed for harness {name!r}. "
-            "Implement AgentHarness and inject it into DataEngineeringPipeline."
+    if name == "pi":
+        from .agent.pi import PiHarness, PiSettings
+
+        return PiHarness(
+            PiSettings(
+                project_root=workspace_root,
+                timeout_seconds=pi_timeout_seconds,
+                stall_timeout_seconds=pi_stall_timeout_seconds,
+                max_continuations=pi_max_continuations,
+                max_provider_retries=pi_provider_retries,
+                retry_backoff_seconds=pi_retry_backoff_seconds,
+            )
         )
+    if name != "opencode":
+        raise ValueError(f"Unknown harness {name!r}")
 
     from .agent.opencode import OpencodeHarness, OpencodeSettings
 
@@ -141,6 +188,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("choose --example, --all, or --list-examples")
 
     workspace_root = args.workspace_root.expanduser().resolve()
+    provider_id = args.provider or (
+        "opencode" if args.harness == "opencode" else "gwdg"
+    )
+    model_id = args.model or (
+        "deepseek-v4-flash-free"
+        if args.harness == "opencode"
+        else "devstral-2-123b-instruct-2512"
+    )
     sandbox_manager = None
     if args.harness == "opencode":
         from .agent.opencode_sandbox import OpencodeSandboxManager
@@ -159,7 +214,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = PipelineConfig(
         workspace_root=workspace_root,
         prompt_path=prompt_path,
-        model=ModelConfig(provider_id=args.provider, model_id=args.model),
+        model=ModelConfig(provider_id=provider_id, model_id=model_id),
         force_download=args.force_download,
     )
     pipeline = DataEngineeringPipeline(
@@ -167,9 +222,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         harness=_create_harness(
             args.harness,
             args.opencode_url,
+            workspace_root=workspace_root,
             max_continuations=args.opencode_max_continuations,
             provider_retries=args.opencode_provider_retries,
             retry_backoff_seconds=args.opencode_retry_backoff,
+            pi_max_continuations=args.pi_max_continuations,
+            pi_provider_retries=args.pi_provider_retries,
+            pi_retry_backoff_seconds=args.pi_retry_backoff,
+            pi_timeout_seconds=args.pi_timeout,
+            pi_stall_timeout_seconds=args.pi_stall_timeout,
         ),
         metadata_generator=CroissantBakerMetadataGenerator(),
         config=config,
@@ -178,12 +239,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     keys = tuple(EXAMPLE_DATASETS) if args.all else tuple(args.example)
     for key in keys:
         if sandbox_manager is not None:
-            sandbox_manager.ensure(key)
+            sandbox_manager.ensure(key, required_provider=provider_id)
         result = pipeline.run(key)
         print(
             f"{result.dataset.spec.key}: harness={result.agent.harness}, "
             f"run={result.agent.run_id}, output={result.agent.output_dir}, "
-            f"metadata={result.metadata.path}"
+            f"metadata={result.metadata.path}, "
+            f"provenance={result.provenance_path}"
         )
     return 0
 

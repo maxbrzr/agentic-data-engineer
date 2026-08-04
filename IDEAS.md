@@ -2,13 +2,13 @@
 
 - make harness and model agnostic
     - opencode  X
-    - pi (https://pi.dev/)
+    - pi (https://pi.dev/) X
 
 - Sandboxing X
 
 - make model provide agnostic
-    - kit vs 
-    - gwdg vs 
+    - kit  
+    - gwdg  X
     - shipped with X
     - small local model 
 

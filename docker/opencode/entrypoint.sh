@@ -38,12 +38,14 @@ import os
 from pathlib import Path
 
 marker = {
-    "version": 2,
     "example_key": os.environ["ADE_EXAMPLE_KEY"],
     "data_root": os.environ["ADE_DATA_ROOT"],
     "output_dir": os.environ["ADE_OUTPUT_DIR"],
     "data_read_only": True,
     "output_writable": True,
+    "configured_providers": (
+        ["gwdg"] if os.environ.get("SAIA_API_KEY", "").strip() else []
+    ),
 }
 Path(os.environ["ADE_SANDBOX_MARKER"]).write_text(
     json.dumps(marker, sort_keys=True),
@@ -52,6 +54,6 @@ Path(os.environ["ADE_SANDBOX_MARKER"]).write_text(
 '
 
 python3 /opt/agentic-data-engineer/attestation_server.py \
-    >/tmp/opencode-sandbox-attestation.log 2>&1 &
+    >/tmp/opencode-attestation.log 2>&1 &
 
 exec "$@"

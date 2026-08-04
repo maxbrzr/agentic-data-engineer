@@ -2,7 +2,7 @@
 set -eu
 
 usage() {
-    echo "Usage: scripts/opencode-sandbox {start|stop|logs|status|probe|config} <example-key>" >&2
+    echo "Usage: scripts/opencode {start|stop|logs|status|probe|config} <example-key>" >&2
     echo "Example keys: tcm-predictive-maintenance, chemical-process-safety, industry-5-cyber-physical-systems" >&2
     exit 2
 }
@@ -21,7 +21,7 @@ case "$example_key" in
 esac
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-compose_file="$project_root/compose.opencode-sandbox.yml"
+compose_file="$project_root/compose.opencode.yml"
 dataset_dir="$project_root/data/$example_key"
 output_dir="$project_root/output/$example_key"
 

@@ -110,3 +110,4 @@ class PipelineRunResult:
     dataset: RetrievedDataset
     agent: AgentRunResult
     metadata: MetadataGenerationResult
+    provenance_path: Path

@@ -28,7 +28,6 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
             response = io.BytesIO(
                 json.dumps(
                     {
-                        "version": 2,
                         "output_dir": str(output_dir),
                         "probe_name": probe.name,
                         "probe_token": "matching-token",
@@ -54,7 +53,6 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
             response = io.BytesIO(
                 json.dumps(
                     {
-                        "version": 2,
                         "output_dir": str(output_dir),
                         "probe_name": ".opencode-sandbox-live-probe",
                         "probe_token": "container-only-token",
@@ -72,16 +70,19 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
                         output_dir,
                     )
 
-    def test_attestation_rejects_previous_container_layout(self):
+    def test_attestation_accepts_run_directory_within_output_mount(self):
         with tempfile.TemporaryDirectory() as temp_dir:
-            output_dir = Path(temp_dir).resolve()
+            output_root = Path(temp_dir).resolve()
+            run_dir = output_root / "runs" / "one-run"
+            run_dir.mkdir(parents=True)
+            probe = output_root / ".opencode-sandbox-live-probe"
+            probe.write_text("matching-token", encoding="utf-8")
             response = io.BytesIO(
                 json.dumps(
                     {
-                        "version": 1,
-                        "output_dir": str(output_dir),
-                        "probe_name": ".opencode-sandbox-live-probe",
-                        "probe_token": "old-container",
+                        "output_dir": str(output_root),
+                        "probe_name": probe.name,
+                        "probe_token": "matching-token",
                     }
                 ).encode("utf-8")
             )
@@ -90,11 +91,13 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
                 "agentic_data_engineer.agent.opencode_sandbox.urlopen",
                 return_value=response,
             ):
-                with self.assertRaisesRegex(ValueError, "version is stale"):
-                    read_sandbox_attestation(
-                        "http://127.0.0.1:54322/marker",
-                        output_dir,
-                    )
+                marker = read_sandbox_attestation(
+                    "http://127.0.0.1:54322/marker",
+                    run_dir,
+                )
+
+            self.assertEqual(str(output_root), marker["output_dir"])
+            self.assertFalse(probe.exists())
 
     def test_matching_sandbox_is_reused_without_starting_compose(self):
         runner_calls = []
@@ -102,7 +105,6 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
             marker = {
-                "version": 2,
                 "example_key": "chemical-process-safety",
                 "data_root": str(root / "data" / "chemical-process-safety"),
                 "output_dir": str(root / "output" / "chemical-process-safety"),
@@ -128,7 +130,6 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
             marker = {
-                "version": 2,
                 "example_key": "chemical-process-safety",
                 "data_root": str(root / "data" / "chemical-process-safety"),
                 "output_dir": str(root / "output" / "chemical-process-safety"),
@@ -143,7 +144,7 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
                     raise ConnectionError("server is not running")
                 return marker
 
-            launcher = root / "scripts" / "opencode-sandbox"
+            launcher = root / "scripts" / "opencode"
             launcher.parent.mkdir()
             launcher.write_text("#!/bin/sh\n", encoding="utf-8")
             manager = OpencodeSandboxManager(
@@ -180,7 +181,7 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
-            launcher = root / "scripts" / "opencode-sandbox"
+            launcher = root / "scripts" / "opencode"
             launcher.parent.mkdir()
             launcher.write_text("#!/bin/sh\n", encoding="utf-8")
             manager = OpencodeSandboxManager(
@@ -194,6 +195,52 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
                 r"Docker Desktop is running",
             ):
                 manager.ensure("chemical-process-safety")
+
+    def test_gwdg_requires_nonempty_saia_key_in_dotenv(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            (root / ".env").write_text("SAIA_API_KEY=\n", encoding="utf-8")
+            manager = OpencodeSandboxManager(project_root=root)
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                r"SAIA_API_KEY.*\.env",
+            ):
+                manager.ensure(
+                    "chemical-process-safety",
+                    required_provider="gwdg",
+                )
+
+    def test_gwdg_reuses_sandbox_when_key_and_provider_are_loaded(self):
+        runner_calls = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            (root / ".env").write_text(
+                "SAIA_API_KEY=test-only-key\n",
+                encoding="utf-8",
+            )
+            marker = {
+                "example_key": "chemical-process-safety",
+                "data_root": str(root / "data" / "chemical-process-safety"),
+                "output_dir": str(root / "output" / "chemical-process-safety"),
+                "data_read_only": True,
+                "output_writable": True,
+                "configured_providers": ["gwdg"],
+            }
+            manager = OpencodeSandboxManager(
+                project_root=root,
+                attestation_reader=lambda _url, _expected_output: marker,
+                command_runner=lambda *args, **kwargs: runner_calls.append(
+                    (args, kwargs)
+                ),
+            )
+
+            manager.ensure(
+                "chemical-process-safety",
+                required_provider="gwdg",
+            )
+
+            self.assertEqual([], runner_calls)
 
     def test_custom_server_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:

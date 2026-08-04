@@ -23,11 +23,11 @@ RUN python3 -m venv /opt/agent-runtime \
         scikit-learn==1.9.0
 
 COPY src ./src
-COPY docker/opencode-sandbox/attestation_server.py ./attestation_server.py
-COPY docker/opencode-sandbox/opencode.json /etc/opencode/opencode.json
-COPY docker/opencode-sandbox/entrypoint.sh /usr/local/bin/opencode-sandbox-entrypoint
+COPY docker/opencode/attestation_server.py ./attestation_server.py
+COPY docker/opencode/opencode.json /etc/opencode/opencode.json
+COPY docker/opencode/entrypoint.sh /usr/local/bin/opencode-entrypoint
 
-RUN chmod 0555 /usr/local/bin/opencode-sandbox-entrypoint
+RUN chmod 0555 /usr/local/bin/opencode-entrypoint
 
 ENV PATH="/opt/agent-runtime/bin:${PATH}" \
     PYTHONPATH="/opt/agentic-data-engineer/src" \
@@ -36,5 +36,5 @@ ENV PATH="/opt/agent-runtime/bin:${PATH}" \
 
 USER node
 
-ENTRYPOINT ["opencode-sandbox-entrypoint"]
+ENTRYPOINT ["opencode-entrypoint"]
 CMD ["opencode", "serve", "--hostname", "0.0.0.0", "--port", "54321"]

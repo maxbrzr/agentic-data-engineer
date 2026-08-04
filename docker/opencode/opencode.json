@@ -1,0 +1,82 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4-flash-free",
+  "small_model": "opencode/deepseek-v4-flash-free",
+  "enabled_providers": ["opencode", "gwdg"],
+  "provider": {
+    "gwdg": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "GWDG SAIA",
+      "options": {
+        "baseURL": "https://chat-ai.academiccloud.de/v1",
+        "apiKey": "{env:SAIA_API_KEY}"
+      },
+      "models": {
+        "apertus-70b-instruct-2509": {
+          "name": "Apertus 70B Instruct 2509 (GWDG SAIA)"
+        },
+        "deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash (GWDG SAIA)"
+        },
+        "devstral-2-123b-instruct-2512": {
+          "name": "Devstral 2 123B (GWDG SAIA)"
+        },
+        "gemma-4-31b-it": {
+          "name": "Gemma 4 31B Instruct (GWDG SAIA)"
+        },
+        "glm-4.7": {
+          "name": "GLM 4.7 (GWDG SAIA)"
+        },
+        "meta-llama-3.1-8b-instruct": {
+          "name": "Llama 3.1 8B Instruct (GWDG SAIA)"
+        },
+        "mistral-medium-3.5-128b": {
+          "name": "Mistral Medium 3.5 128B (GWDG SAIA)"
+        },
+        "openai-gpt-oss-120b": {
+          "name": "GPT OSS 120B (GWDG SAIA)"
+        },
+        "qwen3-30b-a3b-instruct-2507": {
+          "name": "Qwen 3 30B A3B Instruct 2507 (GWDG SAIA)"
+        },
+        "qwen3-coder-next": {
+          "name": "Qwen 3 Coder Next (GWDG SAIA)"
+        },
+        "qwen3-omni-30b-a3b-instruct": {
+          "name": "Qwen 3 Omni 30B A3B Instruct (GWDG SAIA)"
+        },
+        "qwen3.5-122b-a10b": {
+          "name": "Qwen 3.5 122B A10B (GWDG SAIA)"
+        },
+        "qwen3.5-397b-a17b": {
+          "name": "Qwen 3.5 397B A17B (GWDG SAIA)"
+        },
+        "qwen3.6-27b": {
+          "name": "Qwen 3.6 27B (GWDG SAIA)"
+        },
+        "qwen3.6-35b-a3b": {
+          "name": "Qwen 3.6 35B A3B (GWDG SAIA)"
+        }
+      }
+    }
+  },
+  "share": "disabled",
+  "permission": {
+    "*": "allow",
+    "read": "allow",
+    "glob": "allow",
+    "grep": "allow",
+    "edit": {
+      "*": "allow",
+      "data": "deny",
+      "data/**": "deny"
+    },
+    "bash": "allow",
+    "external_directory": "allow",
+    "webfetch": "deny",
+    "websearch": "deny",
+    "task": "deny",
+    "question": "deny",
+    "doom_loop": "deny"
+  }
+}

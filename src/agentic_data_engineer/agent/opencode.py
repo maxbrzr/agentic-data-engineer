@@ -11,7 +11,6 @@ from ..contracts import AgentRequest, AgentRunResult, ModelConfig
 from .opencode_logging import save_session_messages, watch_session_events
 from .opencode_sandbox import (
     AttestationReader,
-    SANDBOX_ATTESTATION_VERSION,
     read_sandbox_attestation,
 )
 
@@ -87,7 +86,7 @@ class OpencodeHarness:
     def run(self, request: AgentRequest, model: ModelConfig) -> AgentRunResult:
         request.output_dir.mkdir(parents=True, exist_ok=True)
         if self.settings.require_sandbox_preflight:
-            self._validate_sandbox(request)
+            self._validate_sandbox(request, model)
         client = self._client_factory(base_url=self.settings.base_url)
         session = client.session.create()
         response: Any = None
@@ -201,7 +200,11 @@ class OpencodeHarness:
             metadata=metadata,
         )
 
-    def _validate_sandbox(self, request: AgentRequest) -> None:
+    def _validate_sandbox(
+        self,
+        request: AgentRequest,
+        model: ModelConfig,
+    ) -> None:
         expected_key = request.dataset.spec.key
         expected_output = request.output_dir.resolve()
         expected_data = request.dataset.data_dir.resolve()
@@ -216,7 +219,7 @@ class OpencodeHarness:
                 "OpenCode sandbox preflight failed before an agent session was "
                 "created. The localhost sandbox attestation endpoint did not "
                 "expose a valid mount marker. Start the matching container with "
-                f"`./scripts/opencode-sandbox start {expected_key}`."
+                f"`./scripts/opencode start {expected_key}`."
             ) from exc
 
         actual_key = marker.get("example_key")
@@ -224,18 +227,17 @@ class OpencodeHarness:
         actual_data_root = self._marker_path(marker, "data_root")
         problems: list[str] = []
 
-        if marker.get("version") != SANDBOX_ATTESTATION_VERSION:
-            problems.append(
-                "container attestation version is stale; rebuild the sandbox"
-            )
         if actual_key != expected_key:
             problems.append(
                 f"container example is {actual_key!r}, requested {expected_key!r}"
             )
-        if actual_output != expected_output:
+        if actual_output is None or not self._is_within(
+            expected_output,
+            actual_output,
+        ):
             problems.append(
-                f"container output is {str(actual_output)!r}, expected "
-                f"{str(expected_output)!r}"
+                f"requested output {str(expected_output)!r} is not within the "
+                f"container output mount {str(actual_output)!r}"
             )
         if actual_data_root is None or not self._is_within(
             expected_data,
@@ -251,13 +253,22 @@ class OpencodeHarness:
             problems.append(
                 "container did not attest that the selected output is writable"
             )
+        if model.provider_id == "gwdg":
+            configured_providers = marker.get("configured_providers", [])
+            if (
+                not isinstance(configured_providers, list)
+                or "gwdg" not in configured_providers
+            ):
+                problems.append(
+                    "GWDG was selected but SAIA_API_KEY was not loaded from .env"
+                )
 
         if problems:
             details = "; ".join(problems)
             raise ValueError(
                 "OpenCode sandbox preflight failed before an agent session was "
                 f"created: {details}. Reconfigure the container with "
-                f"`./scripts/opencode-sandbox start {expected_key}` and rerun "
+                f"`./scripts/opencode start {expected_key}` and rerun "
                 "the pipeline."
             )
 

@@ -2,7 +2,7 @@ services:
   opencode:
     build:
       context: .
-      dockerfile: docker/opencode-sandbox/Dockerfile
+      dockerfile: docker/opencode/Dockerfile
       args:
         OPENCODE_VERSION: "${OPENCODE_VERSION:-1.18.9}"
     init: true
@@ -26,7 +26,7 @@ services:
       ADE_OUTPUT_DIR: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
       ADE_SANDBOX_MARKER: /tmp/agentic-data-engineer-sandbox.json
     env_file:
-      - path: .env.opencode
+      - path: .env
         required: false
     ports:
       - "127.0.0.1:54321:54321"

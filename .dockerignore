@@ -5,7 +5,7 @@
 !src/
 !src/**
 !docker/
-!docker/opencode-sandbox/
-!docker/opencode-sandbox/entrypoint.sh
-!docker/opencode-sandbox/attestation_server.py
-!docker/opencode-sandbox/opencode.json
+!docker/opencode/
+!docker/opencode/**
+!docker/pi/
+!docker/pi/**

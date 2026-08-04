@@ -1,3 +1,5 @@
+import hashlib
+import json
 import os
 import subprocess
 import sys
@@ -214,7 +216,11 @@ class PipelineArchitectureTests(unittest.TestCase):
             request, received_model = harness.calls[0]
             self.assertIs(model, received_model)
             self.assertEqual(root / "data" / result.dataset.spec.key, request.dataset.data_dir)
-            self.assertEqual(root / "output" / result.dataset.spec.key, request.output_dir)
+            self.assertEqual(
+                root / "output" / result.dataset.spec.key / "runs",
+                request.output_dir.parent,
+            )
+            self.assertIn("provider-a__model-a", request.output_dir.name)
             self.assertEqual("System prompt", request.system_prompt)
             self.assertIn(str(request.dataset.data_dir), request.task_prompt)
             self.assertIn("do not create or edit that file", request.task_prompt)
@@ -227,6 +233,73 @@ class PipelineArchitectureTests(unittest.TestCase):
             self.assertEqual(
                 [result.dataset],
                 metadata_generator.preflight_calls,
+            )
+            self.assertEqual(
+                request.output_dir / "provenance.json",
+                result.provenance_path,
+            )
+            provenance = json.loads(
+                result.provenance_path.read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                {
+                    "harness": "fake",
+                    "provider": "provider-a",
+                    "model": "model-a",
+                    "run_id": "fake-run",
+                    "message_id": None,
+                },
+                provenance["agent_run"],
+            )
+            train_provenance = provenance["artifacts"]["train.csv"]
+            self.assertEqual("agent", train_provenance["producer_type"])
+            self.assertEqual("provider-a", train_provenance["provider"])
+            self.assertEqual("model-a", train_provenance["model"])
+            self.assertEqual(
+                hashlib.sha256(
+                    (request.output_dir / "train.csv").read_bytes()
+                ).hexdigest(),
+                train_provenance["sha256"],
+            )
+            croissant_provenance = provenance["artifacts"]["croissant.json"]
+            self.assertEqual(
+                "metadata_generator",
+                croissant_provenance["producer_type"],
+            )
+            self.assertEqual(
+                "fake-metadata",
+                croissant_provenance["generator"],
+            )
+            self.assertEqual(
+                "model-a",
+                croissant_provenance["derived_from_agent_run"]["model"],
+            )
+
+    def test_repeated_runs_use_distinct_provider_model_output_directories(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            prompt = root / "agent.md"
+            prompt.write_text("System prompt", encoding="utf-8")
+            pipeline = DataEngineeringPipeline(
+                retriever=FakeRetriever(),
+                harness=FakeHarness(),
+                metadata_generator=FakeMetadataGenerator(),
+                config=PipelineConfig(
+                    workspace_root=root,
+                    prompt_path=prompt,
+                    model=ModelConfig("gwdg", "devstral/model"),
+                ),
+            )
+
+            first = pipeline.run("chemical-process-safety")
+            second = pipeline.run("chemical-process-safety")
+
+            self.assertNotEqual(first.agent.output_dir, second.agent.output_dir)
+            self.assertTrue(first.provenance_path.is_file())
+            self.assertTrue(second.provenance_path.is_file())
+            self.assertIn(
+                "gwdg__devstral-model",
+                first.agent.output_dir.name,
             )
 
     def test_pipeline_can_process_all_enabled_examples(self):
@@ -600,7 +673,6 @@ class OpencodeAdapterTests(unittest.TestCase):
         def read_attestation(url, _expected_output):
             attestation_reads.append(url)
             return {
-                "version": 2,
                 "example_key": "chemical-process-safety",
                 "data_root": str(data_root),
                 "output_dir": str(artifact_dir),
@@ -671,7 +743,6 @@ class OpencodeAdapterTests(unittest.TestCase):
             root = Path(temp_dir).resolve()
             marker.update(
                 {
-                    "version": 2,
                     "example_key": "tcm-predictive-maintenance",
                     "data_root": str(
                         root / "data" / "tcm-predictive-maintenance"

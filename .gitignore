@@ -13,7 +13,7 @@ __pycache__/
 
 .env
 .env.*
-.env.opencode
+!.env.example
 
 # Local opencode run logs/reports
 output/opencode_*

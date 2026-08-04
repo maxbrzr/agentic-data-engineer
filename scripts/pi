@@ -1,0 +1,49 @@
+#!/bin/sh
+set -eu
+
+usage() {
+    echo "Usage: scripts/pi run <example-key> <request-file>" >&2
+    echo "Example keys: tcm-predictive-maintenance, chemical-process-safety, industry-5-cyber-physical-systems" >&2
+    exit 2
+}
+
+[ "${1:-}" = "run" ] || usage
+example_key=${2:-}
+request_file=${3:-}
+
+case "$example_key" in
+    tcm-predictive-maintenance|chemical-process-safety|industry-5-cyber-physical-systems) ;;
+    *) usage ;;
+esac
+
+[ -f "$request_file" ] || usage
+
+project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+compose_file="$project_root/compose.pi.yml"
+dataset_dir="$project_root/data/$example_key"
+output_dir="$project_root/output/$example_key"
+
+case "$request_file" in
+    "$output_dir"/*) ;;
+    *)
+        echo "Pi request file must be inside $output_dir" >&2
+        exit 2
+        ;;
+esac
+
+mkdir -p "$dataset_dir" "$output_dir"
+
+ADE_UID=$(id -u)
+ADE_GID=$(id -g)
+export ADE_ROOT="$project_root"
+export ADE_UID
+export ADE_GID
+export EXAMPLE_KEY="$example_key"
+export PI_REQUEST_FILE="$request_file"
+
+exec docker compose --file "$compose_file" run \
+    --build \
+    --rm \
+    --no-deps \
+    -T \
+    pi

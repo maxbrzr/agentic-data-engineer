@@ -1,0 +1,38 @@
+services:
+  pi:
+    build:
+      context: .
+      dockerfile: docker/pi/Dockerfile
+      args:
+        PI_VERSION: "${PI_VERSION:-0.82.1}"
+    init: true
+    user: "${ADE_UID:-1000}:${ADE_GID:-1000}"
+    working_dir: "${ADE_ROOT:?Set ADE_ROOT to the absolute repository path}"
+    environment:
+      HOME: /tmp/pi-home
+      PI_CODING_AGENT_DIR: /tmp/pi-home/agent
+      PI_OFFLINE: "1"
+      PI_TELEMETRY: "0"
+      ADE_EXAMPLE_KEY: "${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+      ADE_DATA_ROOT: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+      ADE_OUTPUT_DIR: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+      PI_REQUEST_FILE: "${PI_REQUEST_FILE:?Set PI_REQUEST_FILE}"
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - type: bind
+        source: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+        target: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+        read_only: true
+      - type: bind
+        source: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+        target: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=1g,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
