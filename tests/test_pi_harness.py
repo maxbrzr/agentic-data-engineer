@@ -165,6 +165,15 @@ class PiHarnessTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "SAIA_API_KEY"):
                 harness.run(request, ModelConfig("gwdg", "model-a"))
 
+    def test_kit_requires_key_in_ignored_dotenv(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            request = self._request(root)
+            harness = PiHarness(PiSettings(project_root=root))
+
+            with self.assertRaisesRegex(RuntimeError, "KIT_AI_API_KEY"):
+                harness.run(request, ModelConfig("kit", "kit.gpt-oss-120b"))
+
     def test_retries_transient_provider_error_event(self):
         attempts = []
         sleeps = []

@@ -21,6 +21,13 @@ EXPECTED_GWDG_MODELS = {
     "qwen3.6-27b",
     "qwen3.6-35b-a3b",
 }
+EXPECTED_KIT_MODELS = {
+    "kit.gpt-oss-120b",
+    "kit.mistral-small-4-119b-a8b",
+    "kit.gemma4-31b-it",
+    "kit.qwen3.5-397b-A17b",
+    "kit.minimax-m2.7-229b",
+}
 
 
 class SandboxConfigurationTests(unittest.TestCase):
@@ -100,6 +107,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         parsed_config = json.loads(container_config)
         self.assertIn('"external_directory": "allow"', container_config)
         self.assertIn("gwdg", parsed_config["enabled_providers"])
+        self.assertIn("kit", parsed_config["enabled_providers"])
         gwdg = parsed_config["provider"]["gwdg"]
         self.assertEqual("@ai-sdk/openai-compatible", gwdg["npm"])
         self.assertEqual(
@@ -108,6 +116,14 @@ class SandboxConfigurationTests(unittest.TestCase):
         )
         self.assertEqual("{env:SAIA_API_KEY}", gwdg["options"]["apiKey"])
         self.assertEqual(EXPECTED_GWDG_MODELS, set(gwdg["models"]))
+        kit = parsed_config["provider"]["kit"]
+        self.assertEqual("@ai-sdk/openai-compatible", kit["npm"])
+        self.assertEqual(
+            "https://ki-toolbox.scc.kit.edu/api/v1",
+            kit["options"]["baseURL"],
+        )
+        self.assertEqual("{env:KIT_AI_API_KEY}", kit["options"]["apiKey"])
+        self.assertEqual(EXPECTED_KIT_MODELS, set(kit["models"]))
         self.assertNotRegex(container_config, r"Bearer\s+[A-Za-z0-9]")
         self.assertIn("path: .env", compose)
         self.assertNotIn(".env.opencode", compose)
@@ -141,8 +157,10 @@ class SandboxConfigurationTests(unittest.TestCase):
             "sandbox_manager.ensure(key, required_provider=provider_id)",
             cli,
         )
+        self.assertIn('elif provider_id == "kit":', cli)
+        self.assertIn('model_id = "kit.mistral-small-4-119b-a8b"', cli)
 
-    def test_pi_container_and_gwdg_models_are_restricted(self):
+    def test_pi_container_and_remote_models_are_restricted(self):
         dockerfile = (ROOT / "docker" / "pi" / "Dockerfile").read_text(
             encoding="utf-8"
         )
@@ -182,6 +200,12 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertEqual("$SAIA_API_KEY", gwdg["apiKey"])
         self.assertTrue(gwdg["authHeader"])
         self.assertEqual(EXPECTED_GWDG_MODELS, {item["id"] for item in gwdg["models"]})
+        kit = models["providers"]["kit"]
+        self.assertEqual("openai-completions", kit["api"])
+        self.assertEqual("https://ki-toolbox.scc.kit.edu/api/v1", kit["baseUrl"])
+        self.assertEqual("$KIT_AI_API_KEY", kit["apiKey"])
+        self.assertTrue(kit["authHeader"])
+        self.assertEqual(EXPECTED_KIT_MODELS, {item["id"] for item in kit["models"]})
 
     def test_dotenv_template_is_tracked_but_secret_file_is_ignored(self):
         gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
@@ -189,7 +213,8 @@ class SandboxConfigurationTests(unittest.TestCase):
 
         self.assertIn(".env", gitignore)
         self.assertIn("!.env.example", gitignore)
-        self.assertEqual("SAIA_API_KEY=", template.splitlines()[-1])
+        self.assertIn("SAIA_API_KEY=", template.splitlines())
+        self.assertIn("KIT_AI_API_KEY=", template.splitlines())
 
 
 if __name__ == "__main__":

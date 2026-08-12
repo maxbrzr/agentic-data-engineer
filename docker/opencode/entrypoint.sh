@@ -37,15 +37,19 @@ import json
 import os
 from pathlib import Path
 
+configured_providers = []
+if os.environ.get("SAIA_API_KEY", "").strip():
+    configured_providers.append("gwdg")
+if os.environ.get("KIT_AI_API_KEY", "").strip():
+    configured_providers.append("kit")
+
 marker = {
     "example_key": os.environ["ADE_EXAMPLE_KEY"],
     "data_root": os.environ["ADE_DATA_ROOT"],
     "output_dir": os.environ["ADE_OUTPUT_DIR"],
     "data_read_only": True,
     "output_writable": True,
-    "configured_providers": (
-        ["gwdg"] if os.environ.get("SAIA_API_KEY", "").strip() else []
-    ),
+    "configured_providers": configured_providers,
 }
 Path(os.environ["ADE_SANDBOX_MARKER"]).write_text(
     json.dumps(marker, sort_keys=True),

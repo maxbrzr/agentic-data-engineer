@@ -13,6 +13,7 @@ from .opencode_sandbox import (
     AttestationReader,
     read_sandbox_attestation,
 )
+from .provider_env import provider_environment_name
 
 ClientFactory = Callable[..., Any]
 Sleeper = Callable[[float], None]
@@ -253,14 +254,16 @@ class OpencodeHarness:
             problems.append(
                 "container did not attest that the selected output is writable"
             )
-        if model.provider_id == "gwdg":
+        required_env = provider_environment_name(model.provider_id)
+        if required_env is not None:
             configured_providers = marker.get("configured_providers", [])
             if (
                 not isinstance(configured_providers, list)
-                or "gwdg" not in configured_providers
+                or model.provider_id not in configured_providers
             ):
                 problems.append(
-                    "GWDG was selected but SAIA_API_KEY was not loaded from .env"
+                    f"Provider {model.provider_id!r} was selected but "
+                    f"{required_env} was not loaded from .env"
                 )
 
         if problems:

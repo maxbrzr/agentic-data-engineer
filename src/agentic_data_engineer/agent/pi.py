@@ -13,6 +13,7 @@ from typing import Any
 from uuid import uuid4
 
 from ..contracts import AgentRequest, AgentRunResult, ModelConfig
+from .provider_env import require_provider_environment
 
 CommandRunner = Callable[..., Any]
 Sleeper = Callable[[float], None]
@@ -468,24 +469,7 @@ class PiHarness:
             stream.write(f"\n[harness] {note}\n")
 
     def _require_provider_environment(self, provider_id: str) -> None:
-        if provider_id != "gwdg":
-            return
-        env_path = self.settings.project_root / ".env"
-        try:
-            lines = env_path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            lines = []
-        for line in lines:
-            candidate = line.strip()
-            if not candidate or candidate.startswith("#") or "=" not in candidate:
-                continue
-            key, value = candidate.removeprefix("export ").split("=", 1)
-            if key.strip() == "SAIA_API_KEY" and value.strip().strip("'\""):
-                return
-        raise RuntimeError(
-            f"Provider 'gwdg' requires SAIA_API_KEY in the ignored "
-            f"environment file {env_path}."
-        )
+        require_provider_environment(self.settings.project_root, provider_id)
 
     @staticmethod
     def _missing_outputs(output_dir: Path) -> list[str]:

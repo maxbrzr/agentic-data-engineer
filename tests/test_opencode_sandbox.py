@@ -242,6 +242,52 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
 
             self.assertEqual([], runner_calls)
 
+    def test_kit_requires_nonempty_api_key_in_dotenv(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            (root / ".env").write_text("KIT_AI_API_KEY=\n", encoding="utf-8")
+            manager = OpencodeSandboxManager(project_root=root)
+
+            with self.assertRaisesRegex(
+                RuntimeError,
+                r"KIT_AI_API_KEY.*\.env",
+            ):
+                manager.ensure(
+                    "chemical-process-safety",
+                    required_provider="kit",
+                )
+
+    def test_kit_reuses_sandbox_when_key_and_provider_are_loaded(self):
+        runner_calls = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            (root / ".env").write_text(
+                "KIT_AI_API_KEY=test-only-key\n",
+                encoding="utf-8",
+            )
+            marker = {
+                "example_key": "chemical-process-safety",
+                "data_root": str(root / "data" / "chemical-process-safety"),
+                "output_dir": str(root / "output" / "chemical-process-safety"),
+                "data_read_only": True,
+                "output_writable": True,
+                "configured_providers": ["kit"],
+            }
+            manager = OpencodeSandboxManager(
+                project_root=root,
+                attestation_reader=lambda _url, _expected_output: marker,
+                command_runner=lambda *args, **kwargs: runner_calls.append(
+                    (args, kwargs)
+                ),
+            )
+
+            manager.ensure(
+                "chemical-process-safety",
+                required_provider="kit",
+            )
+
+            self.assertEqual([], runner_calls)
+
     def test_custom_server_is_rejected(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with self.assertRaisesRegex(
