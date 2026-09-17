@@ -1,15 +1,12 @@
 from pathlib import Path
 
-
 PROVIDER_ENV_REQUIREMENTS = {
     "gwdg": "SAIA_API_KEY",
     "kit": "KIT_AI_API_KEY",
 }
 
-
 def provider_environment_name(provider_id: str | None) -> str | None:
     return PROVIDER_ENV_REQUIREMENTS.get(provider_id or "")
-
 
 def dotenv_has_value(path: Path, name: str) -> bool:
     try:
@@ -24,7 +21,6 @@ def dotenv_has_value(path: Path, name: str) -> bool:
         if key.strip() == name:
             return bool(value.strip().strip("'\""))
     return False
-
 
 def require_provider_environment(project_root: Path, provider_id: str | None) -> None:
     env_name = provider_environment_name(provider_id)

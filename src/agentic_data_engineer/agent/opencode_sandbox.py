@@ -1,3 +1,4 @@
+import hashlib
 import json
 import subprocess
 from collections.abc import Callable
@@ -156,6 +157,7 @@ class OpencodeSandboxManager:
             return False
 
         configured_providers = marker.get("configured_providers", [])
+        expected_config_sha256 = self._expected_config_sha256()
         provider_ready = (
             required_provider not in PROVIDER_ENV_REQUIREMENTS
             or (
@@ -169,8 +171,19 @@ class OpencodeSandboxManager:
             and self._path(marker.get("output_dir")) == expected_output
             and marker.get("data_read_only") is True
             and marker.get("output_writable") is True
+            and (
+                expected_config_sha256 is None
+                or marker.get("opencode_config_sha256")
+                == expected_config_sha256
+            )
             and provider_ready
         )
+
+    def _expected_config_sha256(self) -> str | None:
+        config_path = self.project_root / "docker" / "opencode" / "opencode.json"
+        if not config_path.is_file():
+            return None
+        return hashlib.sha256(config_path.read_bytes()).hexdigest()
 
     def _require_provider_environment(self, provider: str | None) -> None:
         require_provider_environment(self.project_root, provider)

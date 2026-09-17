@@ -29,3 +29,8 @@ class PipelineConfig:
         if not self.prompt_path.is_file():
             raise FileNotFoundError(f"Agent prompt does not exist: {self.prompt_path}")
         return self.prompt_path.read_text(encoding="utf-8")
+
+    def load_example_guidance(self, example_key: str) -> str:
+        """Load optional task guidance without replacing the system prompt."""
+        path = self.workspace_root / "prompts" / "examples" / f"{example_key}.md"
+        return path.read_text(encoding="utf-8") if path.is_file() else ""

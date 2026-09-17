@@ -1,3 +1,4 @@
+import hashlib
 import io
 import json
 import subprocess
@@ -171,6 +172,45 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
             )
             self.assertEqual(root, kwargs["cwd"])
             self.assertIs(kwargs["check"], True)
+
+    def test_changed_opencode_config_recreates_sandbox(self):
+        runner_calls = []
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            config_path = root / "docker" / "opencode" / "opencode.json"
+            config_path.parent.mkdir(parents=True)
+            config_path.write_text('{"model":"new-model"}\n', encoding="utf-8")
+            expected_digest = hashlib.sha256(config_path.read_bytes()).hexdigest()
+            base_marker = {
+                "example_key": "chemical-process-safety",
+                "data_root": str(root / "data" / "chemical-process-safety"),
+                "output_dir": str(root / "output" / "chemical-process-safety"),
+                "data_read_only": True,
+                "output_writable": True,
+            }
+            markers = [
+                {**base_marker, "opencode_config_sha256": "stale"},
+                {**base_marker, "opencode_config_sha256": expected_digest},
+            ]
+
+            def read_marker(_url, _expected_output):
+                return markers.pop(0)
+
+            launcher = root / "scripts" / "opencode"
+            launcher.parent.mkdir()
+            launcher.write_text("#!/bin/sh\n", encoding="utf-8")
+            manager = OpencodeSandboxManager(
+                project_root=root,
+                attestation_reader=read_marker,
+                command_runner=lambda *args, **kwargs: runner_calls.append(
+                    (args, kwargs)
+                ),
+            )
+
+            manager.ensure("chemical-process-safety")
+
+            self.assertEqual(1, len(runner_calls))
 
     def test_start_failure_has_actionable_docker_error(self):
         def unavailable_attestation(_url, _expected_output):

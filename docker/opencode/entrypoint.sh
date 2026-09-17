@@ -33,6 +33,7 @@ rm -f "$output_probe"
 
 export ADE_SANDBOX_MARKER="$marker_path"
 python3 -c '
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -50,6 +51,9 @@ marker = {
     "data_read_only": True,
     "output_writable": True,
     "configured_providers": configured_providers,
+    "opencode_config_sha256": hashlib.sha256(
+        Path(os.environ["OPENCODE_CONFIG"]).read_bytes()
+    ).hexdigest(),
 }
 Path(os.environ["ADE_SANDBOX_MARKER"]).write_text(
     json.dumps(marker, sort_keys=True),

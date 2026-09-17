@@ -10,6 +10,7 @@ requires-python = ">=3.12"
 dependencies = [
     "croissant-baker>=0.3.2,<0.4.0",
     "dcat-ap-hub>=0.1.4",
+    "kagglehub>=1.0.2",
     "mlcroissant>=1.1.0,<1.2.0",
     "numpy>=2.5.0",
     "pandas>=3.0.3",

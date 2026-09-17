@@ -8,13 +8,17 @@ then generates ML Croissant metadata and provenance.
 OpenCode is the default agent harness. Pi is available as an alternative. Both
 run in restricted Docker containers; no agent GUI is required.
 
-The current version supports three configured DCAT-AP examples. Catalogue
+The current version supports seven configured DCAT-AP examples. Catalogue
 discovery and publishing are not implemented yet:
 
 - dataset discovery through the Piveau REST API;
 - uploading or registering results with Piveau;
 - data integration across datasets;
 - non-tabular data.
+
+The multimodal Floor Type Detection example is currently handled as an
+explicit sensor-only tabular experiment; its camera files are inventoried but
+not used as model features.
 
 ## Quick start
 
@@ -34,8 +38,43 @@ uv run --extra opencode agentic-data-engineer --list-examples
 uv run --extra opencode agentic-data-engineer --example tcm-predictive-maintenance
 ```
 
+Run the complete printed-paper image dataset with the image prompt:
+
+```bash
+uv run --extra opencode agentic-data-engineer \
+  --example printed-paper-scratches \
+  --harness opencode \
+  --provider kit \
+  --model kit.qwen3.5-397b-A17b \
+  --prompt prompts/image-data-engineer.md
+```
+
+Audio datasets use the same pipeline with an explicit audio prompt:
+
+```bash
+uv run --extra opencode agentic-data-engineer \
+  --example mimii-sound-anomaly-detection \
+  --harness opencode \
+  --provider kit \
+  --model kit.qwen3.5-397b-A17b \
+  --prompt prompts/audio-data-engineer.md
+```
+
+An experimental Pi run on the sensor portion of the Floor Type Detection
+dataset can be started with larger timeouts for its many small CSV files:
+
+```bash
+uv run agentic-data-engineer \
+  --harness pi \
+  --example floor-type-detection \
+  --provider kit \
+  --model kit.qwen3.5-397b-A17b \
+  --pi-timeout 7200 \
+  --pi-stall-timeout 600
+```
+
 OpenCode is selected automatically and uses
-`opencode/deepseek-v4-flash-free` by default. The CLI builds the container,
+`opencode/mimo-v2.5-free` by default. The CLI builds the container,
 mounts the selected dataset, and checks the sandbox automatically. Diagnostic
 commands are available through `./scripts/opencode`.
 

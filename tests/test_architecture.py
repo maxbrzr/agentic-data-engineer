@@ -100,11 +100,16 @@ class FakeMetadataGenerator:
 
 
 class CatalogAndRetrievalTests(unittest.TestCase):
-    def test_catalog_contains_exactly_three_examples(self):
+    def test_catalog_contains_enabled_examples(self):
         examples = list_examples()
-        self.assertEqual(3, len(examples))
+        self.assertEqual(8, len(examples))
         self.assertEqual(set(EXAMPLE_DATASETS), {example.key for example in examples})
         self.assertEqual(examples[0], get_example(examples[0].key))
+        self.assertIn("floor-type-detection", EXAMPLE_DATASETS)
+        self.assertIn("printed-paper-scratches", EXAMPLE_DATASETS)
+        self.assertIn("mimii-sound-anomaly-detection", EXAMPLE_DATASETS)
+        self.assertIn("mimii-dg", EXAMPLE_DATASETS)
+        self.assertIn("bearing", EXAMPLE_DATASETS)
 
     def test_unknown_example_fails(self):
         with self.assertRaisesRegex(KeyError, "Unknown example"):
@@ -152,6 +157,107 @@ class CatalogAndRetrievalTests(unittest.TestCase):
             self.assertEqual((root / spec.key / "table.csv",), result.files)
             self.assertEqual([(root / spec.key, True, False)], calls)
 
+    def test_dcat_adapter_uses_curated_metadata_resource(self):
+        calls = []
+
+        class FakeCollection:
+            def __init__(self, root, assets):
+                self.root = root
+                self.assets = assets
+
+            def __iter__(self):
+                return iter(self.assets)
+
+        class FakeDataset:
+            title = "DCASE 2022 Challenge Task 2 Development Dataset"
+
+            def download(self, *, data_dir, force, verbose):
+                calls.append((data_dir, force, verbose))
+                root = data_dir / self.title
+                root.mkdir(parents=True)
+                audio = root / "sample.wav"
+                audio.write_bytes(b"RIFF")
+                return FakeCollection(root, [SimpleNamespace(path=audio)])
+
+        local_paths = []
+
+        def local_factory(path):
+            local_paths.append(path)
+            return FakeDataset()
+
+        def remote_factory(_url):
+            self.fail("The remote catalogue must not be used for curated metadata")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            spec = get_example("mimii-dg")
+            result = DcatApHubRetriever(
+                dataset_factory=remote_factory,
+                local_dataset_factory=local_factory,
+                verbose=False,
+            ).retrieve(spec, root)
+
+            self.assertEqual(1, len(local_paths))
+            self.assertEqual("mimii-dg.jsonld", local_paths[0].name)
+            self.assertEqual(root / spec.key / FakeDataset.title, result.data_dir)
+            self.assertEqual([(root / spec.key, False, False)], calls)
+            copied = result.data_dir / "dcat-metadata.jsonld"
+            self.assertEqual(
+                local_paths[0].read_text(encoding="utf-8"),
+                copied.read_text(encoding="utf-8"),
+            )
+
+    def test_dcat_adapter_reuses_existing_local_dataset_without_remote_lookup(self):
+        class FakeCollection:
+            def __init__(self, root, assets):
+                self.root = root
+                self.assets = assets
+
+            def __iter__(self):
+                return iter(self.assets)
+
+        class FakeDataset:
+            title = "Local metadata title"
+
+            def __init__(self, root):
+                self.root = root
+
+            def download(self, *, data_dir, force, verbose):
+                self.assert_download_args = (data_dir, force, verbose)
+                audio = self.root / "sample.wav"
+                return FakeCollection(self.root, [SimpleNamespace(path=audio)])
+
+        local_paths = []
+
+        def directory_factory(path):
+            local_paths.append(path)
+            return FakeDataset(path)
+
+        def remote_factory(_url):
+            self.fail("Existing local data must bypass the remote catalogue")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            spec = get_example("printed-paper-scratches")
+            collection_root = root / spec.key / spec.title
+            collection_root.mkdir(parents=True)
+            (collection_root / "dcat-metadata.jsonld").write_text(
+                "{}",
+                encoding="utf-8",
+            )
+            (collection_root / "sample.wav").write_bytes(b"RIFF")
+
+            result = DcatApHubRetriever(
+                dataset_factory=remote_factory,
+                directory_dataset_factory=directory_factory,
+                verbose=False,
+            ).retrieve(spec, root)
+
+            self.assertEqual([collection_root], local_paths)
+            self.assertEqual(collection_root, result.data_dir)
+            self.assertEqual("Local metadata title", result.metadata_title)
+            self.assertEqual((collection_root / "sample.wav",), result.files)
+
     def test_dcat_adapter_rejects_non_catalog_dataset(self):
         unsupported = DatasetSpec(
             key="unsupported",
@@ -160,7 +266,7 @@ class CatalogAndRetrievalTests(unittest.TestCase):
         )
         retriever = DcatApHubRetriever(dataset_factory=lambda _url: None)
         with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "three enabled examples"):
+            with self.assertRaisesRegex(ValueError, "not an enabled example"):
                 retriever.retrieve(unsupported, Path(temp_dir))
 
 
@@ -323,10 +429,10 @@ class PipelineArchitectureTests(unittest.TestCase):
 
             results = pipeline.run_examples()
 
-            self.assertEqual(3, len(results))
+            self.assertEqual(8, len(results))
             self.assertEqual(set(EXAMPLE_DATASETS), {result.dataset.spec.key for result in results})
-            self.assertEqual(3, len(harness.calls))
-            self.assertEqual(3, len(metadata_generator.calls))
+            self.assertEqual(8, len(harness.calls))
+            self.assertEqual(8, len(metadata_generator.calls))
 
     def test_pipeline_rejects_false_harness_completion_before_metadata(self):
         class MissingOutputHarness:

@@ -548,7 +548,7 @@ def test_croissant_distribution_references_train_and_test(
 
 
 def test_croissant_file_objects(json_path: str | Path) -> None:
-    """Require complete, uniquely identified local FileObject entries."""
+    """Require complete, uniquely identified FileObject and FileSet entries."""
     path, metadata = _load_croissant(json_path)
     entries = _distribution_entries(metadata)
     if not entries:
@@ -563,26 +563,44 @@ def test_croissant_file_objects(json_path: str | Path) -> None:
             f"Croissant distribution contains duplicate @id values: {duplicate_ids}."
         )
 
-    required = {"@id", "name", "contentUrl", "encodingFormat", "sha256"}
     for item in entries:
-        missing = sorted(key for key in required if not str(item.get(key, "")).strip())
-        if item.get("@type") != "cr:FileObject":
-            raise ValueError(
-                f"Distribution {item.get('@id', '<unknown>')!r} is not a cr:FileObject."
+        item_type = item.get("@type")
+        if item_type == "cr:FileObject":
+            required = {"@id", "name", "contentUrl", "encodingFormat", "sha256"}
+            missing = sorted(
+                key for key in required if not str(item.get(key, "")).strip()
             )
-        if missing:
-            raise ValueError(
-                f"Distribution {item.get('@id', '<unknown>')!r} is missing fields: {missing}."
+            if missing:
+                raise ValueError(
+                    f"Distribution {item.get('@id', '<unknown>')!r} is missing "
+                    f"fields: {missing}."
+                )
+            file_path = _local_distribution_path(path, item)
+            if not file_path.is_file():
+                raise ValueError(f"Distribution file does not exist: {file_path}.")
+        elif item_type == "cr:FileSet":
+            required = {"@id", "name", "encodingFormat", "includes"}
+            missing = sorted(
+                key for key in required if not item.get(key)
             )
-        file_path = _local_distribution_path(path, item)
-        if not file_path.is_file():
-            raise ValueError(f"Distribution file does not exist: {file_path}.")
+            if missing:
+                raise ValueError(
+                    f"Distribution {item.get('@id', '<unknown>')!r} is missing "
+                    f"fields: {missing}."
+                )
+        else:
+            raise ValueError(
+                f"Distribution {item.get('@id', '<unknown>')!r} has unsupported "
+                f"type {item_type!r}."
+            )
 
 
 def test_croissant_hashes_match_files(json_path: str | Path) -> None:
     """Require every declared SHA-256 hash to match its local file."""
     path, metadata = _load_croissant(json_path)
     for item in _distribution_entries(metadata):
+        if item.get("@type") != "cr:FileObject":
+            continue
         file_path = _local_distribution_path(path, item)
         if not file_path.is_file():
             raise ValueError(f"Distribution file does not exist: {file_path}.")

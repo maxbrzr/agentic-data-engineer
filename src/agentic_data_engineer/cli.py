@@ -24,7 +24,7 @@ def build_parser() -> argparse.ArgumentParser:
     selection.add_argument(
         "--all",
         action="store_true",
-        help="Process all three enabled examples sequentially.",
+        help="Process all enabled examples sequentially.",
     )
     parser.add_argument(
         "--list-examples",
@@ -197,7 +197,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         model_id = "kit.mistral-small-4-119b-a8b"
     else:
         model_id = (
-            "deepseek-v4-flash-free"
+            "mimo-v2.5-free"
             if args.harness == "opencode"
             else "devstral-2-123b-instruct-2512"
         )

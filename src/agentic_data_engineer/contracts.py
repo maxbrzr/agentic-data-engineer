@@ -11,6 +11,7 @@ class DatasetSpec:
     key: str
     title: str
     url: str
+    metadata_resource: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

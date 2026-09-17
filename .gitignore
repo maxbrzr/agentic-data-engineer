@@ -5,7 +5,7 @@ output/
 .jupyter-config/
 .matplotlib-cache/
 .ipynb_checkpoints/
-
+run_comparison/
 __pycache__/
 *.py[cod]
 

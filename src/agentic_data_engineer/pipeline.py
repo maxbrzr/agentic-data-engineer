@@ -49,7 +49,11 @@ class DataEngineeringPipeline:
             dataset=retrieved,
             output_dir=output_dir,
             system_prompt=self.config.load_system_prompt(),
-            task_prompt=self._build_task_prompt(retrieved.data_dir, output_dir),
+            task_prompt=self._build_task_prompt(
+                retrieved.data_dir,
+                output_dir,
+                guidance=self.config.load_example_guidance(spec.key),
+            ),
         )
         agent_result = self.harness.run(request, self.config.model)
         self._require_agent_outputs(output_dir, agent_result.run_id)
@@ -84,17 +88,21 @@ class DataEngineeringPipeline:
         )
 
     @staticmethod
-    def _build_task_prompt(data_dir, output_dir) -> str:
-        return (
+    def _build_task_prompt(data_dir, output_dir, *, guidance: str = "") -> str:
+        prompt = (
             "Follow the system instructions completely. "
             f"The read-only local dataset is in {data_dir}. "
             f"Write every generated artifact to {output_dir}. "
             f"Analyze the dataset, create the reusable parser at {output_dir / 'parser.py'}, "
-            "run all applicable tabular validations, and export validated train/test "
+            "run every validation required by the selected system prompt, and export "
+            "validated train/test "
             "splits. The pipeline generates and validates croissant.json after your run; "
             "do not create or edit that file. Do not report success unless parser.py, "
-            "train.csv, and test.csv exist and every applicable tabular validation passes."
+            "train.csv, and test.csv exist and every applicable validation passes."
         )
+        if guidance.strip():
+            prompt += "\n\nDataset-specific guidance:\n" + guidance.strip()
+        return prompt
 
     def _create_run_output_dir(self, example_key: str) -> Path:
         timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")

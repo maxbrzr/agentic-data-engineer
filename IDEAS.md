@@ -13,3 +13,6 @@
     - small local model 
 
 - mlcroissant validation lib (https://github.com/MIT-LCP/croissant-baker) X
+
+
+- (lars) kann man den description text der KI allianz noch irgendwie mit scrapen?

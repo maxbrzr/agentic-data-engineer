@@ -1,0 +1,37 @@
+{
+  "@graph": [
+    {
+      "@id": "https://zenodo.org/records/6355122#dev_bearing",
+      "@type": "dcat:Dataset",
+      "dct:title": "DCASE 2022 Task 2 Development Dataset: Bearing subset",
+      "dct:description": "Bearing-machine subset of the DCASE 2022 Task 2 development dataset for unsupervised anomalous sound detection under domain shift. It contains single-channel ten-second recordings and official train/test organization with attribute tables.",
+      "dct:identifier": "10.5281/zenodo.6355122#dev_bearing",
+      "dct:issued": {"@value": "2022-03-15"},
+      "dct:modified": {"@value": "2022-06-14"},
+      "dct:license": "cc-by-nc-sa-4.0",
+      "dct:creator": [
+        {"@id": "https://www.hitachi.com/"},
+        {"@id": "https://group.ntt/en/"}
+      ],
+      "dcat:keyword": ["audio", "anomalous sound detection", "bearing", "domain generalization"],
+      "dcat:distribution": {"@id": "https://zenodo.org/api/records/6355122/files/dev_bearing.zip/content"}
+    },
+    {
+      "@id": "https://www.hitachi.com/",
+      "@type": "foaf:Organization",
+      "foaf:name": "Hitachi, Ltd."
+    },
+    {
+      "@id": "https://group.ntt/en/",
+      "@type": "foaf:Organization",
+      "foaf:name": "NTT Corporation"
+    },
+    {
+      "@id": "https://zenodo.org/api/records/6355122/files/dev_bearing.zip/content",
+      "@type": "dcat:Distribution",
+      "dct:title": "dev_bearing.zip",
+      "dct:license": "cc-by-nc-sa-4.0",
+      "dcat:downloadURL": {"@id": "https://zenodo.org/api/records/6355122/files/dev_bearing.zip/content"}
+    }
+  ]
+}

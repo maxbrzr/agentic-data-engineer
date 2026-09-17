@@ -55,6 +55,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertIn("raw data mount is writable", entrypoint)
         self.assertIn("output mount is not writable", entrypoint)
         self.assertIn("agentic-data-engineer-sandbox.json", entrypoint)
+        self.assertIn('"opencode_config_sha256"', entrypoint)
 
     def test_compose_enforces_host_filesystem_boundary(self):
         compose = (ROOT / "compose.opencode.yml").read_text(
@@ -105,6 +106,11 @@ class SandboxConfigurationTests(unittest.TestCase):
             ROOT / "docker" / "opencode" / "opencode.json"
         ).read_text(encoding="utf-8")
         parsed_config = json.loads(container_config)
+        self.assertEqual("opencode/mimo-v2.5-free", parsed_config["model"])
+        self.assertEqual(
+            "opencode/mimo-v2.5-free",
+            parsed_config["small_model"],
+        )
         self.assertIn('"external_directory": "allow"', container_config)
         self.assertIn("gwdg", parsed_config["enabled_providers"])
         self.assertIn("kit", parsed_config["enabled_providers"])
@@ -138,6 +144,10 @@ class SandboxConfigurationTests(unittest.TestCase):
             "tcm-predictive-maintenance",
             "chemical-process-safety",
             "industry-5-cyber-physical-systems",
+            "floor-type-detection",
+            "printed-paper-scratches",
+            "mimii-sound-anomaly-detection",
+            "mimii-dg",
         ):
             self.assertIn(example_key, launcher)
         self.assertIn('case "$example_key" in', launcher)
@@ -159,6 +169,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         )
         self.assertIn('elif provider_id == "kit":', cli)
         self.assertIn('model_id = "kit.mistral-small-4-119b-a8b"', cli)
+        self.assertIn('"mimo-v2.5-free"', cli)
 
     def test_pi_container_and_remote_models_are_restricted(self):
         dockerfile = (ROOT / "docker" / "pi" / "Dockerfile").read_text(
