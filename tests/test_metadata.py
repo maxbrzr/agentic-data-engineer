@@ -274,7 +274,7 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
                 json.dumps(metadata), encoding="utf-8"
             )
 
-            for split, target in (("train", 0), ("test", 1)):
+            for split, label in (("train", "normal"), ("test", "fault")):
                 audio_dir = output_dir / split / "audio"
                 audio_dir.mkdir(parents=True)
                 audio_name = f"{split}.wav"
@@ -284,9 +284,13 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
                     wav.setframerate(8000)
                     wav.writeframes(b"\x00\x00" * 80)
                 (output_dir / f"{split}.csv").write_text(
-                    "sample_id,audio_id,file_name,source_file_name,target\n"
-                    f"{split}-sample,{split}-audio,{split}/audio/{audio_name},"
-                    f"source/{audio_name},{target}\n",
+                    "file_name,label\n"
+                    f"{split}/audio/{audio_name},{label}\n",
+                    encoding="utf-8",
+                )
+                (output_dir / f"{split}_captions.csv").write_text(
+                    "file_name,text\n"
+                    f"{split}/audio/{audio_name},A short audio caption.\n",
                     encoding="utf-8",
                 )
 
@@ -317,6 +321,10 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
                     field.get("dataType")
                     for field in audio_record_set["field"]
                 },
+            )
+            self.assertTrue(
+                {"train_captions", "test_captions"}
+                <= {item["name"] for item in generated["recordSet"]}
             )
 
     def test_unresolved_zenodo_creator_uri_supplies_creator_name(self):

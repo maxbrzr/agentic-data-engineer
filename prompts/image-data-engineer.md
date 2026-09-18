@@ -58,6 +58,12 @@ Each split CSV is UTF-8 with a header and exactly one row per image. `file_name`
 is the only required identity column. It is a unique, portable POSIX path to the
 copied image relative to `output_dir`, such as `train/images/a1b2c3.png`.
 
+Treat that relative media path as the primary key. For a scalar supervised
+task, the primary manifest is a direct `file_name -> target` mapping; do not add
+a separate image, observation, sample, row, or group identifier. Use sidecar
+tables keyed by `file_name` when one image has multiple or structured
+annotations.
+
 For single-label classification, add the required human-readable `label` column:
 
 ```csv
@@ -91,13 +97,31 @@ Adapt the manifest and normalized sidecar CSV files to the selected task:
   duplicate image rows in `train.csv` or `test.csv`.
 
 - Object detection or instance segmentation: write `<split>_objects.csv` with
-  one row per authoritative object and columns
-  `file_name,object_id,label,xmin,ymin,xmax,ymax`. Require `object_id` to be
-  unique within each image. Use source-image pixel coordinates with inclusive
-  top-left and exclusive bottom-right boundaries, and validate
-  `0 <= xmin < xmax <= width` and `0 <= ymin < ymax <= height`. Images without
-  objects remain in the split manifest and have no object rows. Add
-  `mask_file_name` only for an authoritative instance mask.
+  one row per authoritative object annotation. Every row must contain
+  `file_name`, referencing exactly one image in the corresponding split
+  manifest.
+
+  Select only the authoritative fields required to represent the chosen task.
+  Use the conventional columns `object_id`, `label`, `xmin`, `ymin`, `xmax`,
+  `ymax`, and `mask_file_name` when the corresponding information is available
+  and relevant. Additional source fields may be included only when they are
+  necessary to interpret or validate the selected image task.
+
+  Do not require information that the source does not provide, and do not infer
+  or generate bounding boxes, masks, labels, object identifiers, or other
+  annotations.
+
+  When `object_id` is included, require it to be unique within each image. When
+  bounding boxes are included, represent them in source-image pixel coordinates
+  using inclusive top-left and exclusive bottom-right boundaries, and validate
+  `0 <= xmin < xmax <= width` and `0 <= ymin < ymax <= height`. Include
+  `mask_file_name` only for an authoritative instance mask and validate that it
+  belongs to the referenced image and object.
+
+  Images without applicable object annotations remain in the main split
+  manifest and have no rows in `<split>_objects.csv`. Document the selected
+  schema, omitted source fields, coordinate convention, and any lossless column
+  renaming in `report.md`.
 
 - Semantic segmentation: add one authoritative `mask_file_name` per image to
   the same row of the split manifest. A row in `train.csv` must map
@@ -114,8 +138,9 @@ corresponding split manifest. Do not serialize lists, dictionaries, or JSON
 inside CSV cells.
 
 Use identical manifest schemas for train and test, with stable column and row
-ordering. Add source metadata columns only when justified by the selected task;
-do not export label-revealing metadata as model features by default.
+ordering. Do not add source metadata columns to the primary manifests. Keep
+task-required structured annotations in the applicable sidecars and describe
+non-exported source metadata used for splitting or validation in `report.md`.
 
 Write `report.md` with the chosen task, local target evidence, included and
 rejected sources, joins and cardinalities, split rationale and sizes, class
@@ -196,15 +221,21 @@ def parse(
     ...
 ```
 
-`parse()` returns one canonical image table with one row per image. `target_col`
-names the selected source target or annotation role and must be validated rather
-than silently replaced. The internal table must retain `source_file_name`,
-relative to `dataset_dir`, so the exporter can copy the right asset and the
-validator can compare it with the exported file. Drop `source_file_name` from
-the final train/test CSV files. Load normalized object, caption, or multi-label
-associations in task-specific helper functions when they cannot be represented
-as one scalar column per image. `parse()` must be deterministic and must not
-write files as a side effect.
+`parse()` returns one minimal canonical image table with one row per image. Use
+`source_file_name`, relative to `dataset_dir`, as its unique primary key and
+include the selected scalar target as the only other column when the task has
+one. `target_col` names that target or annotation role and must be validated
+rather than silently replaced. Do not return split markers, group keys, parsed
+filename components, image properties, descriptive metadata, or pass-through
+source columns from `parse()`. Keep information needed for splitting, leakage
+prevention, joins, reporting, and validation in separate local intermediate
+tables or helper functions keyed by `source_file_name`. During export, replace
+`source_file_name` with the copied relative `file_name`; do not include both
+paths in final train/test CSV files. For a structured target that cannot be
+represented by one scalar per image, keep the primary table key-only and load
+object, caption, or multi-label associations in task-specific helper functions
+for export to the applicable sidecar. `parse()` must be deterministic and must
+not write files as a side effect.
 
 The generated parser must define the selected `target_col` from its documented
 dataset analysis and pass it to `parse()` from the CLI workflow. Do not ask the
