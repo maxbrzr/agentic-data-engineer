@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from croissant_baker.handlers.registry import register_handler
 from croissant_baker.metadata_generator import MetadataGenerator
 
 from ..contracts import (
@@ -13,10 +12,6 @@ from ..contracts import (
     RetrievedDataset,
 )
 from ..validation import test_croissant_all
-from .audio_handler import AudioHandler
-
-_AUDIO_HANDLER = AudioHandler()
-register_handler(_AUDIO_HANDLER)
 
 BakerFactory = Callable[..., Any]
 CroissantValidator = Callable[[str | Path], None]
@@ -25,7 +20,6 @@ _LICENSE_ALIASES = {
     "cc-by-4.0": "CC-BY-4.0",
     "cc-by-sa-4.0": "CC-BY-SA-4.0",
     "cc-by-nc-4.0": "CC-BY-NC-4.0",
-    "cc-by-nc-sa-4.0": "CC-BY-NC-SA-4.0",
     "cc-by-nd-4.0": "CC-BY-ND-4.0",
     "cc0-1.0": "CC0-1.0",
 }
@@ -36,58 +30,6 @@ _REQUIRED_SOURCE_FIELDS = (
     "citation",
     "date_published",
     "creators",
-)
-_IMAGE_SUFFIXES = (
-    ".bmp",
-    ".gif",
-    ".ico",
-    ".jpeg",
-    ".jpg",
-    ".png",
-    ".tif",
-    ".tiff",
-    ".webp",
-)
-_MEDIA_SPLITS = ("train", "test", "validation")
-_IMAGE_DIRECTORIES = ("images", "masks")
-_IMAGE_SIDECARS = (
-    "labels.csv",
-    "mask_labels.csv",
-    "train_labels.csv",
-    "test_labels.csv",
-    "validation_labels.csv",
-    "train_objects.csv",
-    "test_objects.csv",
-    "validation_objects.csv",
-    "train_captions.csv",
-    "test_captions.csv",
-    "validation_captions.csv",
-)
-_AUDIO_SUFFIXES = (
-    ".aac",
-    ".aif",
-    ".aiff",
-    ".flac",
-    ".m4a",
-    ".mp3",
-    ".ogg",
-    ".opus",
-    ".wav",
-)
-_AUDIO_SIDECARS = (
-    "labels.csv",
-    "train_labels.csv",
-    "test_labels.csv",
-    "validation_labels.csv",
-    "train_captions.csv",
-    "test_captions.csv",
-    "validation_captions.csv",
-    "train_segments.csv",
-    "test_segments.csv",
-    "validation_segments.csv",
-    "train_transcripts.csv",
-    "test_transcripts.csv",
-    "validation_transcripts.csv",
 )
 
 
@@ -145,7 +87,7 @@ def _creator_name(
     if not identifier:
         return None
     parsed = urlparse(str(identifier))
-    if "/author/" not in parsed.path:
+    if parsed.netloc.lower() != "zenodo.org" or "/author/" not in parsed.path:
         return None
 
     encoded_name = parsed.path.rstrip("/").rsplit("/", 1)[-1]
@@ -209,14 +151,10 @@ def _load_dcat_metadata(dataset: RetrievedDataset) -> dict[str, Any]:
         if (keyword := _literal(value))
     ]
     identifier = _literal(dataset_node.get("dct:identifier"))
-    landing_page = _literal(dataset_node.get("dcat:landingPage"))
-    if not identifier and landing_page:
-        match = re.search(r"(?:persistentId=)?doi:(10\.[^&]+)", landing_page)
-        identifier = match.group(1) if match else None
     citation = (
         f"https://doi.org/{identifier}"
         if identifier and identifier.startswith("10.")
-        else identifier or landing_page
+        else identifier
     )
 
     return {
@@ -229,12 +167,8 @@ def _load_dcat_metadata(dataset: RetrievedDataset) -> dict[str, Any]:
             else None
         ),
         "citation": citation,
-        "date_published": _literal(
-            dataset_node.get("dct:issued") or dataset_node.get("dcat:issued")
-        ),
-        "date_modified": _literal(
-            dataset_node.get("dct:modified") or dataset_node.get("dcat:modified")
-        ),
+        "date_published": _literal(dataset_node.get("dct:issued")),
+        "date_modified": _literal(dataset_node.get("dct:modified")),
         "creators": [{"name": name} for name in creator_names],
         "keywords": keywords or None,
     }
@@ -249,111 +183,6 @@ def _require_source_metadata(metadata: dict[str, Any]) -> None:
             "DCAT metadata is missing values required for Croissant generation: "
             f"{missing}."
         )
-
-
-def _contains_supported_image(directory: Path) -> bool:
-    if not directory.is_dir():
-        return False
-    return any(
-        path.is_file() and path.suffix.lower() in _IMAGE_SUFFIXES
-        for path in directory.rglob("*")
-    )
-
-
-def _image_baker_includes(output_dir: Path) -> list[str]:
-    """Return image-related includes for a standardized image run, if present."""
-    present_splits = {
-        split
-        for split in _MEDIA_SPLITS
-        if _contains_supported_image(output_dir / split / "images")
-    }
-    if not present_splits:
-        return []
-
-    missing = {"train", "test"} - present_splits
-    if missing:
-        raise ValueError(
-            "Cannot generate image Croissant metadata; image directories are "
-            f"missing supported files for splits: {sorted(missing)}."
-        )
-
-    includes: list[str] = []
-    for name in _IMAGE_SIDECARS:
-        if (output_dir / name).is_file():
-            includes.append(name)
-
-    for split in _MEDIA_SPLITS:
-        if split not in present_splits:
-            continue
-        validation_manifest = output_dir / f"{split}.csv"
-        if split == "validation" and validation_manifest.is_file():
-            includes.append(validation_manifest.name)
-        for directory in _IMAGE_DIRECTORIES:
-            root = output_dir / split / directory
-            if not root.is_dir():
-                continue
-            for suffix in _IMAGE_SUFFIXES:
-                includes.extend(
-                    (
-                        f"{split}/{directory}/*{suffix}",
-                        f"{split}/{directory}/**/*{suffix}",
-                    )
-                )
-    return includes
-
-
-def _audio_baker_includes(output_dir: Path) -> list[str]:
-    """Return audio-related includes for a standardized audio run, if present."""
-    files_by_split = {
-        split: _supported_audio_files(output_dir / split / "audio")
-        for split in _MEDIA_SPLITS
-    }
-    present_splits = {
-        split for split, paths in files_by_split.items() if paths
-    }
-    if not present_splits:
-        return []
-
-    missing = {"train", "test"} - present_splits
-    if missing:
-        raise ValueError(
-            "Cannot generate audio Croissant metadata; audio directories are "
-            f"missing supported files for splits: {sorted(missing)}."
-        )
-
-    includes = [
-        name for name in _AUDIO_SIDECARS if (output_dir / name).is_file()
-    ]
-    for split in _MEDIA_SPLITS:
-        if split not in present_splits:
-            continue
-        validation_manifest = output_dir / f"{split}.csv"
-        if split == "validation" and validation_manifest.is_file():
-            includes.append(validation_manifest.name)
-        invalid = [
-            path for path in files_by_split[split] if not _AUDIO_HANDLER.can_handle(path)
-        ]
-        if invalid:
-            relative = [path.relative_to(output_dir).as_posix() for path in invalid]
-            raise ValueError(
-                "Cannot generate audio Croissant metadata; files have an "
-                f"unsupported or invalid audio signature: {relative}."
-            )
-        includes.extend(
-            path.relative_to(output_dir).as_posix()
-            for path in files_by_split[split]
-        )
-    return includes
-
-
-def _supported_audio_files(directory: Path) -> list[Path]:
-    if not directory.is_dir():
-        return []
-    return sorted(
-        path
-        for path in directory.rglob("*")
-        if path.is_file() and path.suffix.lower() in _AUDIO_SUFFIXES
-    )
 
 
 class CroissantBakerMetadataGenerator:
@@ -395,14 +224,9 @@ class CroissantBakerMetadataGenerator:
         metadata = _load_dcat_metadata(dataset)
         _require_source_metadata(metadata)
 
-        includes = ["train.csv", "test.csv"]
-        includes.extend(_image_baker_includes(output_dir))
-        includes.extend(_audio_baker_includes(output_dir))
-        includes = list(dict.fromkeys(includes))
-
         generator = self._generator_factory(
             dataset_path=str(output_dir),
-            includes=includes,
+            includes=["train.csv", "test.csv"],
             name=metadata["name"],
             description=metadata["description"],
             url=metadata["url"],

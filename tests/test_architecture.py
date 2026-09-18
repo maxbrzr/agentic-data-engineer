@@ -102,7 +102,7 @@ class FakeMetadataGenerator:
 class CatalogAndRetrievalTests(unittest.TestCase):
     def test_catalog_contains_enabled_examples(self):
         examples = list_examples()
-        self.assertEqual(8, len(examples))
+        self.assertEqual(len(EXAMPLE_DATASETS), len(examples))
         self.assertEqual(set(EXAMPLE_DATASETS), {example.key for example in examples})
         self.assertEqual(examples[0], get_example(examples[0].key))
         self.assertIn("floor-type-detection", EXAMPLE_DATASETS)
@@ -110,6 +110,7 @@ class CatalogAndRetrievalTests(unittest.TestCase):
         self.assertIn("mimii-sound-anomaly-detection", EXAMPLE_DATASETS)
         self.assertIn("mimii-dg", EXAMPLE_DATASETS)
         self.assertIn("bearing", EXAMPLE_DATASETS)
+        self.assertIn("covid-19-nlp-text-classification", EXAMPLE_DATASETS)
 
     def test_unknown_example_fails(self):
         with self.assertRaisesRegex(KeyError, "Unknown example"):
@@ -327,7 +328,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 request.output_dir.parent,
             )
             self.assertIn("provider-a__model-a", request.output_dir.name)
-            self.assertEqual("System prompt", request.system_prompt)
+            self.assertEqual(config.load_system_prompt(), request.system_prompt)
             self.assertIn(str(request.dataset.data_dir), request.task_prompt)
             self.assertIn("do not create or edit that file", request.task_prompt)
             self.assertEqual("fake-metadata", result.metadata.generator)
@@ -429,10 +430,10 @@ class PipelineArchitectureTests(unittest.TestCase):
 
             results = pipeline.run_examples()
 
-            self.assertEqual(8, len(results))
+            self.assertEqual(len(EXAMPLE_DATASETS), len(results))
             self.assertEqual(set(EXAMPLE_DATASETS), {result.dataset.spec.key for result in results})
-            self.assertEqual(8, len(harness.calls))
-            self.assertEqual(8, len(metadata_generator.calls))
+            self.assertEqual(len(EXAMPLE_DATASETS), len(harness.calls))
+            self.assertEqual(len(EXAMPLE_DATASETS), len(metadata_generator.calls))
 
     def test_pipeline_rejects_false_harness_completion_before_metadata(self):
         class MissingOutputHarness:

@@ -129,6 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Disable dcat-ap-hub download progress output.",
     )
+    parser.add_argument(
+        "--data-augmentation",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Enable the selected prompt's augmentation subprompt (default: disabled).",
+    )
     return parser
 
 
@@ -221,7 +227,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         prompt_path=prompt_path,
         model=ModelConfig(provider_id=provider_id, model_id=model_id),
         force_download=args.force_download,
+        data_augmentation=args.data_augmentation,
     )
+    try:
+        config.load_system_prompt()
+    except (FileNotFoundError, ValueError) as exc:
+        parser.error(str(exc))
     pipeline = DataEngineeringPipeline(
         retriever=DcatApHubRetriever(verbose=not args.quiet_download),
         harness=_create_harness(

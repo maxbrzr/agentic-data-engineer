@@ -61,6 +61,12 @@ _EXAMPLE_DATASETS = {
         url="https://zenodo.org/records/6355122",
         metadata_resource="metadata/mimii-dg-bearing.jsonld",
     ),
+    "covid-19-nlp-text-classification": DatasetSpec(
+        key="covid-19-nlp-text-classification",
+        title="Coronavirus tweets NLP - Text Classification",
+        url="https://www.kaggle.com/datasets/datatattle/covid-19-nlp-text-classification",
+        metadata_resource="metadata/covid-19-nlp-text-classification.jsonld",
+    ),
 }
 
 EXAMPLE_DATASETS = MappingProxyType(_EXAMPLE_DATASETS)

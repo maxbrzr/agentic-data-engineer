@@ -34,6 +34,7 @@ class DataEngineeringPipeline:
         self.config = config
 
     def run(self, example_key: str, *, force_download: bool | None = None) -> PipelineRunResult:
+        system_prompt = self.config.load_system_prompt()
         spec = get_example(example_key)
         retrieved = self.retriever.retrieve(
             spec,
@@ -48,7 +49,7 @@ class DataEngineeringPipeline:
         request = AgentRequest(
             dataset=retrieved,
             output_dir=output_dir,
-            system_prompt=self.config.load_system_prompt(),
+            system_prompt=system_prompt,
             task_prompt=self._build_task_prompt(
                 retrieved.data_dir,
                 output_dir,

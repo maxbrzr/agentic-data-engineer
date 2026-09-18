@@ -1,0 +1,38 @@
+{
+  "@context": {
+    "dcat": "http://www.w3.org/ns/dcat#",
+    "dct": "http://purl.org/dc/terms/",
+    "foaf": "http://xmlns.com/foaf/0.1/"
+  },
+  "@graph": [
+    {
+      "@id": "https://www.kaggle.com/datasets/datatattle/covid-19-nlp-text-classification",
+      "@type": "dcat:Dataset",
+      "dct:title": "Coronavirus tweets NLP - Text Classification",
+      "dct:description": "Manually sentiment-labelled coronavirus-related tweets distributed as Corona_NLP_train.csv (41,157 tweets) and Corona_NLP_test.csv (3,798 tweets). One observation is one tweet. The text input is OriginalTweet and the authoritative target is Sentiment, with classes Extremely Negative, Negative, Neutral, Positive and Extremely Positive. The CSV files also contain coded UserName and ScreenName fields, Location and TweetAt. The source states that tweets were collected from Twitter and manually tagged, and names and usernames were replaced with codes. Preserve the supplied train/test assignment unless a documented integrity or leakage issue requires a justified change. Distribution version 1.",
+      "dct:identifier": "datatattle/covid-19-nlp-text-classification",
+      "dcat:landingPage": {"@id": "https://www.kaggle.com/datasets/datatattle/covid-19-nlp-text-classification"},
+      "dct:issued": {"@value": "2020-09-08T11:40:11.617Z"},
+      "dct:modified": {"@value": "2020-09-08T11:40:11.617Z"},
+      "dct:license": "Data files © Original Authors",
+      "dct:creator": {"@id": "https://www.kaggle.com/datatattle"},
+      "dcat:keyword": ["text", "NLP", "sentiment classification", "COVID-19", "tweets"],
+      "dcat:distribution": {"@id": "https://www.kaggle.com/api/v1/datasets/download/datatattle/covid-19-nlp-text-classification/1"}
+    },
+    {
+      "@id": "https://www.kaggle.com/datatattle",
+      "@type": "foaf:Person",
+      "foaf:name": "Aman Miglani"
+    },
+    {
+      "@id": "https://www.kaggle.com/api/v1/datasets/download/datatattle/covid-19-nlp-text-classification/1",
+      "@type": "dcat:Distribution",
+      "dct:title": "covid-19-nlp-text-classification.zip",
+      "dct:description": "Version 1 archive containing Corona_NLP_train.csv and Corona_NLP_test.csv.",
+      "dct:format": "application/zip",
+      "dct:license": "Data files © Original Authors",
+      "dcat:accessURL": {"@id": "https://www.kaggle.com/datasets/datatattle/covid-19-nlp-text-classification"},
+      "dcat:downloadURL": {"@id": "https://www.kaggle.com/api/v1/datasets/download/datatattle/covid-19-nlp-text-classification/1"}
+    }
+  ]
+}

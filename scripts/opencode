@@ -3,7 +3,7 @@ set -eu
 
 usage() {
     echo "Usage: scripts/opencode {start|stop|logs|status|probe|config} <example-key>" >&2
-    echo "Example keys: tcm-predictive-maintenance, chemical-process-safety, industry-5-cyber-physical-systems, floor-type-detection, printed-paper-scratches, mimii-sound-anomaly-detection, mimii-dg, bearing" >&2
+    echo "Example keys: tcm-predictive-maintenance, chemical-process-safety, industry-5-cyber-physical-systems, floor-type-detection, printed-paper-scratches, mimii-sound-anomaly-detection, mimii-dg, bearing, covid-19-nlp-text-classification" >&2
     exit 2
 }
 
@@ -16,7 +16,7 @@ case "$command_name" in
 esac
 
 case "$example_key" in
-    tcm-predictive-maintenance|chemical-process-safety|industry-5-cyber-physical-systems|floor-type-detection|printed-paper-scratches|mimii-sound-anomaly-detection|mimii-dg|bearing) ;;
+    tcm-predictive-maintenance|chemical-process-safety|industry-5-cyber-physical-systems|floor-type-detection|printed-paper-scratches|mimii-sound-anomaly-detection|mimii-dg|bearing|covid-19-nlp-text-classification) ;;
     *) usage ;;
 esac
 

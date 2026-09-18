@@ -165,6 +165,30 @@ uv run agentic-data-engineer \
 Pi starts a disposable container for each turn and stores its session in the
 run directory.
 
+## Optional data augmentation
+
+Augmentation is disabled by default. Each main prompt has a matching, initially
+empty subprompt in `prompts/augmentation/`, for example:
+
+```text
+prompts/image-data-engineer.md
+prompts/augmentation/image-data-engineer.md
+```
+
+Write the augmentation instructions in the matching subprompt, then add
+`--data-augmentation` to the CLI command. The loader inserts the subprompt under
+`# Data augmentation` in the system prompt. A missing or empty subprompt fails
+before sandbox startup or retrieval. Without the flag (or with
+`--no-data-augmentation`), an explicit no-augmentation instruction is inserted
+and the subprompt is not read. These flags take no `true`/`false` argument.
+
+Only training data may be augmented after original split membership is fixed.
+Source files and evaluation data remain unchanged. The agent must track source
+lineage, use a recorded seed and report techniques, parameters, counts and
+validation results. This feature supplies instructions; it does not itself
+implement augmentation algorithms or independently verify their execution.
+See [the subprompt guide](prompts/augmentation/README.md) for custom prompts.
+
 ## Pipeline
 
 ```text
