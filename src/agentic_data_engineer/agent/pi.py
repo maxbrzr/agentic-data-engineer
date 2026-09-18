@@ -36,7 +36,6 @@ TRANSIENT_PROVIDER_MARKERS = (
     "status code: 504",
 )
 
-
 @dataclass(frozen=True, slots=True)
 class PiSettings:
     project_root: Path
