@@ -74,7 +74,7 @@ uv run agentic-data-engineer \
 ```
 
 OpenCode is selected automatically and uses
-`opencode/mimo-v2.5-free` by default. The CLI builds the container,
+`opencode/mimo-v2.6-flash-free` by default. The CLI builds the container,
 mounts the selected dataset, and checks the sandbox automatically. Diagnostic
 commands are available through `./scripts/opencode`.
 
@@ -188,6 +188,10 @@ lineage, use a recorded seed and report techniques, parameters, counts and
 validation results. This feature supplies instructions; it does not itself
 implement augmentation algorithms or independently verify their execution.
 See [the subprompt guide](prompts/augmentation/README.md) for custom prompts.
+
+Add `--test` to print the fully composed system prompt, including the active
+augmentation policy and subprompt, before the run. The pipeline still executes
+normally; this flag is not a dry run and does not run the software tests.
 
 ## Pipeline
 

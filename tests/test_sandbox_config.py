@@ -106,9 +106,9 @@ class SandboxConfigurationTests(unittest.TestCase):
             ROOT / "docker" / "opencode" / "opencode.json"
         ).read_text(encoding="utf-8")
         parsed_config = json.loads(container_config)
-        self.assertEqual("opencode/mimo-v2.5-free", parsed_config["model"])
+        self.assertEqual("opencode/mimo-v2.6-flash-free", parsed_config["model"])
         self.assertEqual(
-            "opencode/mimo-v2.5-free",
+            "opencode/mimo-v2.6-flash-free",
             parsed_config["small_model"],
         )
         self.assertIn('"external_directory": "allow"', container_config)
@@ -169,7 +169,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         )
         self.assertIn('elif provider_id == "kit":', cli)
         self.assertIn('model_id = "kit.mistral-small-4-119b-a8b"', cli)
-        self.assertIn('"mimo-v2.5-free"', cli)
+        self.assertIn('"mimo-v2.6-flash-free"', cli)
 
     def test_pi_container_and_remote_models_are_restricted(self):
         dockerfile = (ROOT / "docker" / "pi" / "Dockerfile").read_text(

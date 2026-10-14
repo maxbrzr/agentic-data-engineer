@@ -1,3 +1,4 @@
+import ast
 import csv
 import hashlib
 import json
@@ -25,6 +26,17 @@ NUMERIC_CROISSANT_TYPES = {
     "cr:UInt64",
 }
 DATETIME_CROISSANT_TYPES = {"sc:DateTime", "sc:Date", "sc:Time"}
+SUPPORTED_AUDIO_EXTENSIONS = {
+    ".aac",
+    ".aif",
+    ".aiff",
+    ".flac",
+    ".m4a",
+    ".mp3",
+    ".ogg",
+    ".opus",
+    ".wav",
+}
 
 
 # DataFrame validation
@@ -389,6 +401,684 @@ def test_tabular_splits(
         test_chronological_split(train_df, test_df, time_col)
     if normalized_task == "classification":
         test_classification_labels(train_df, test_df, target_col)
+
+
+# Media-manifest target validation
+
+
+def _test_manifest_target_coverage(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    target_col: str,
+    *,
+    multi_label: bool,
+) -> None:
+    test_target_column(train_df, target_col, dataframe_name="Training split")
+    test_target_column(
+        test_df,
+        target_col,
+        require_non_constant=False,
+        dataframe_name="Test split",
+    )
+
+    if not multi_label:
+        train_targets = set(train_df[target_col].unique().tolist())
+        test_targets = set(test_df[target_col].unique().tolist())
+    else:
+        def parse_label_lists(
+            series: pd.Series, split_name: str
+        ) -> tuple[set[str | int], type]:
+            observed: set[str | int] = set()
+            element_type: type | None = None
+            for row_index, value in series.items():
+                if not isinstance(value, str):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must encode {target_col!r} "
+                        "as a Python list literal."
+                    )
+                try:
+                    labels = ast.literal_eval(value)
+                except (SyntaxError, ValueError) as exc:
+                    raise ValueError(
+                        f"{split_name} row {row_index} contains an invalid list "
+                        f"literal in "
+                        f"{target_col!r}: {value!r}."
+                    ) from exc
+                if not isinstance(labels, list) or not labels:
+                    raise ValueError(
+                        f"{split_name} row {row_index} must contain a non-empty "
+                        f"label list in {target_col!r}."
+                    )
+                row_types = {type(label) for label in labels}
+                if len(row_types) != 1 or next(iter(row_types)) not in {str, int}:
+                    raise ValueError(
+                        f"{split_name} row {row_index} must contain only strings or "
+                        f"only integers in {target_col!r}: {labels}."
+                    )
+                row_type = next(iter(row_types))
+                if element_type is None:
+                    element_type = row_type
+                elif element_type is not row_type:
+                    raise ValueError(
+                        f"{split_name} mixes string and integer label lists in "
+                        f"{target_col!r}."
+                    )
+                if row_type is str and any(not label.strip() for label in labels):
+                    raise ValueError(
+                        f"{split_name} row {row_index} contains a blank label in "
+                        f"{target_col!r}."
+                    )
+                if len(labels) != len(set(labels)):
+                    raise ValueError(
+                        f"{split_name} row {row_index} contains duplicate labels in "
+                        f"{target_col!r}: {labels}."
+                    )
+                if labels != sorted(labels):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must sort labels "
+                        f"deterministically in {target_col!r}: {labels}."
+                    )
+                if value != repr(labels):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must use the canonical Python "
+                        f"list representation in {target_col!r}; expected "
+                        f"{repr(labels)!r}."
+                    )
+                observed.update(labels)
+            assert element_type is not None
+            return observed, element_type
+
+        train_targets, train_type = parse_label_lists(
+            train_df[target_col], "Training split"
+        )
+        test_targets, test_type = parse_label_lists(test_df[target_col], "Test split")
+        if train_type is not test_type:
+            raise ValueError(
+                f"Train/test {target_col!r} list element types differ: "
+                f"train={train_type.__name__}, test={test_type.__name__}."
+            )
+
+    unseen_targets = test_targets - train_targets
+    if unseen_targets:
+        raise ValueError(
+            f"Test split contains {target_col!r} values not present in training: "
+            f"{sorted(map(str, unseen_targets))}."
+        )
+
+
+def _test_inline_list_columns(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    list_columns: Sequence[str] | None,
+) -> None:
+    columns = list(list_columns or ())
+    if not columns:
+        return
+
+    for split_name, split_df in (("Training split", train_df), ("Test split", test_df)):
+        _require_columns(split_df, columns, dataframe_name=split_name)
+        for column in columns:
+            for row_index, value in split_df[column].items():
+                if not isinstance(value, str):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must encode {column!r} as "
+                        "a Python list literal."
+                    )
+                try:
+                    items = ast.literal_eval(value)
+                except (SyntaxError, ValueError) as exc:
+                    raise ValueError(
+                        f"{split_name} row {row_index} contains an invalid list "
+                        f"literal in {column!r}: {value!r}."
+                    ) from exc
+                if not isinstance(items, list):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must contain a list in "
+                        f"{column!r}."
+                    )
+                if value != repr(items):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must use the canonical Python "
+                        f"list representation in {column!r}; expected {repr(items)!r}."
+                    )
+
+
+# Image validation
+
+
+def test_image_manifests(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    target_col: str | None = None,
+    *,
+    multi_label: bool = False,
+) -> None:
+    """Validate the common schema and keys of image split manifests."""
+    test_split_schema(train_df, test_df)
+
+    for split_name, split_df in (("Training split", train_df), ("Test split", test_df)):
+        _require_columns(split_df, ["file_name"], dataframe_name=split_name)
+        if split_df["file_name"].isna().any():
+            raise ValueError(f"{split_name} contains missing file_name values.")
+        if split_df["file_name"].duplicated().any():
+            duplicates = split_df.loc[
+                split_df["file_name"].duplicated(keep=False), "file_name"
+            ].astype(str)
+            raise ValueError(
+                f"{split_name} contains duplicate file_name values: "
+                f"{duplicates.unique()[:10].tolist()}."
+            )
+
+    shared_paths = set(train_df["file_name"]).intersection(test_df["file_name"])
+    if shared_paths:
+        raise ValueError(
+            "Train and test reference the same file_name values: "
+            f"{sorted(map(str, shared_paths))[:10]}."
+        )
+
+    if target_col is None:
+        return
+
+    _test_manifest_target_coverage(
+        train_df, test_df, target_col, multi_label=multi_label
+    )
+
+
+def _resolve_image_path(output_dir: Path, file_name: object, split_name: str) -> Path:
+    if not isinstance(file_name, str) or not file_name.strip():
+        raise ValueError(f"{split_name} contains an empty or non-string file_name.")
+    if "\\" in file_name:
+        raise ValueError(
+            f"{split_name} file_name must use portable POSIX separators: {file_name!r}."
+        )
+
+    relative_path = Path(file_name)
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise ValueError(
+            f"{split_name} file_name must be a safe relative path: {file_name!r}."
+        )
+    expected_prefix = (split_name, "images")
+    if len(relative_path.parts) < 3 or relative_path.parts[:2] != expected_prefix:
+        raise ValueError(
+            f"{split_name} file_name must stay below {split_name}/images/: "
+            f"{file_name!r}."
+        )
+
+    path = output_dir / relative_path
+    try:
+        resolved = path.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise ValueError(f"Referenced image does not exist: {file_name!r}.") from exc
+
+    resolved_output = output_dir.resolve()
+    if resolved_output not in resolved.parents:
+        raise ValueError(f"Referenced image escapes output_dir: {file_name!r}.")
+    if not resolved.is_file():
+        raise ValueError(f"Referenced image is not a file: {file_name!r}.")
+    return resolved
+
+
+def test_image_files(
+    manifest_df: pd.DataFrame,
+    output_dir: str | Path,
+    split_name: str,
+) -> dict[str, str]:
+    """Require every manifest image to be safe, present, and fully decodable.
+
+    Returns a mapping from manifest path to SHA-256 digest so callers can reuse
+    the hashes for duplicate or lineage checks.
+    """
+    from PIL import Image, UnidentifiedImageError
+
+    _require_dataframe(manifest_df, f"{split_name} manifest")
+    _require_columns(
+        manifest_df, ["file_name"], dataframe_name=f"{split_name} manifest"
+    )
+    root = Path(output_dir)
+    if not root.is_dir():
+        raise ValueError(f"output_dir is not a directory: {root}.")
+
+    hashes: dict[str, str] = {}
+    for file_name in manifest_df["file_name"]:
+        path = _resolve_image_path(root, file_name, split_name)
+        try:
+            with Image.open(path) as image:
+                image.verify()
+            with Image.open(path) as image:
+                image.load()
+        except (OSError, UnidentifiedImageError) as exc:
+            raise ValueError(f"Unreadable image: {file_name!r}: {exc}") from exc
+
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        hashes[file_name] = digest
+    return hashes
+
+
+def test_image_directory_matches_manifest(
+    manifest_df: pd.DataFrame,
+    output_dir: str | Path,
+    split_name: str,
+) -> None:
+    """Require an exact match between manifest paths and exported image files."""
+    _require_dataframe(manifest_df, f"{split_name} manifest")
+    _require_columns(
+        manifest_df, ["file_name"], dataframe_name=f"{split_name} manifest"
+    )
+    root = Path(output_dir)
+    image_dir = root / split_name / "images"
+    expected = set(manifest_df["file_name"].tolist())
+    actual = {
+        path.relative_to(root).as_posix()
+        for path in image_dir.rglob("*")
+        if path.is_file() or path.is_symlink()
+    }
+
+    missing = sorted(expected - actual, key=str)
+    unexpected = sorted(actual - expected)
+    if missing or unexpected:
+        raise ValueError(
+            f"{split_name} image directory does not match its manifest; "
+            f"missing files: {missing[:10]}, "
+            f"files not declared in manifest: {unexpected[:10]}."
+        )
+
+
+def _duplicate_digest_groups(hashes: dict[str, str]) -> list[list[str]]:
+    by_digest: dict[str, list[str]] = {}
+    for file_name, digest in hashes.items():
+        by_digest.setdefault(digest, []).append(file_name)
+    return [sorted(names) for names in by_digest.values() if len(names) > 1]
+
+
+def _image_pixel_hashes(
+    manifest_df: pd.DataFrame,
+    output_dir: Path,
+    split_name: str,
+) -> dict[str, str]:
+    from PIL import Image
+
+    hashes: dict[str, str] = {}
+    for file_name in manifest_df["file_name"]:
+        path = _resolve_image_path(output_dir, file_name, split_name)
+        with Image.open(path) as image:
+            image.load()
+            digest = hashlib.sha256()
+            digest.update(image.mode.encode("utf-8"))
+            digest.update(str(image.size).encode("ascii"))
+            digest.update(image.tobytes())
+            hashes[file_name] = digest.hexdigest()
+    return hashes
+
+
+def test_no_within_split_image_duplicates(
+    manifest_df: pd.DataFrame,
+    output_dir: str | Path,
+    split_name: str,
+    file_hashes: dict[str, str],
+) -> None:
+    """Reject differently named files with identical bytes or decoded pixels."""
+    byte_duplicates = _duplicate_digest_groups(file_hashes)
+    if byte_duplicates:
+        raise ValueError(
+            f"Found byte-identical images within {split_name}; "
+            f"examples: {byte_duplicates[:10]}."
+        )
+
+    pixel_hashes = _image_pixel_hashes(manifest_df, Path(output_dir), split_name)
+    pixel_duplicates = _duplicate_digest_groups(pixel_hashes)
+    if pixel_duplicates:
+        raise ValueError(
+            f"Found pixel-identical images within {split_name}; "
+            f"examples: {pixel_duplicates[:10]}."
+        )
+
+
+def test_no_cross_split_image_duplicates(
+    train_hashes: dict[str, str],
+    test_hashes: dict[str, str],
+) -> None:
+    """Reject byte-identical image content shared across train and test."""
+    train_by_hash = {digest: name for name, digest in train_hashes.items()}
+    test_by_hash = {digest: name for name, digest in test_hashes.items()}
+    shared_hashes = set(train_by_hash).intersection(test_by_hash)
+    if shared_hashes:
+        examples = [
+            (train_by_hash[digest], test_by_hash[digest])
+            for digest in sorted(shared_hashes)[:10]
+        ]
+        raise ValueError(
+            f"Found {len(shared_hashes)} byte-identical image(s) across train and "
+            f"test; examples: {examples}."
+        )
+
+
+def test_image_validation(
+    output_dir: str | Path,
+    target_col: str | None = None,
+    *,
+    multi_label: bool = False,
+    list_columns: Sequence[str] | None = None,
+    check_content_overlap: bool = True,
+) -> None:
+    """Run basic gatekeeper checks for exported image train/test splits.
+
+    The output directory must contain ``train.csv`` and ``test.csv``. This
+    aggregate validator checks manifest structure, scalar or list-literal target
+    coverage, safe paths, file presence, image decodability, and optionally
+    exact cross-split image duplication. Dataset-specific group, annotation,
+    source-hash, and augmentation-lineage checks remain the generated parser's
+    responsibility.
+    """
+    root = Path(output_dir)
+    train_path = root / "train.csv"
+    test_path = root / "test.csv"
+    for path in (train_path, test_path):
+        if not path.is_file():
+            raise ValueError(f"Required image manifest is missing: {path}.")
+
+    for split_name in ("train", "test"):
+        image_dir = root / split_name / "images"
+        if not image_dir.is_dir():
+            raise ValueError(f"Required image directory is missing: {image_dir}.")
+        if not any(path.is_file() for path in image_dir.rglob("*")):
+            raise ValueError(f"Required image directory is empty: {image_dir}.")
+
+    train_df = pd.read_csv(train_path)
+    test_df = pd.read_csv(test_path)
+    test_image_manifests(
+        train_df, test_df, target_col, multi_label=multi_label
+    )
+    _test_inline_list_columns(train_df, test_df, list_columns)
+    train_hashes = test_image_files(train_df, root, "train")
+    test_hashes = test_image_files(test_df, root, "test")
+    test_image_directory_matches_manifest(train_df, root, "train")
+    test_image_directory_matches_manifest(test_df, root, "test")
+    test_no_within_split_image_duplicates(train_df, root, "train", train_hashes)
+    test_no_within_split_image_duplicates(test_df, root, "test", test_hashes)
+    if check_content_overlap:
+        test_no_cross_split_image_duplicates(train_hashes, test_hashes)
+    test_augmentation_preview(root)
+
+
+def test_augmentation_preview(output_dir: str | Path) -> None:
+    """Require a valid PNG preview whenever augmentation.csv is present."""
+    from PIL import Image, UnidentifiedImageError
+
+    root = Path(output_dir)
+    if not (root / "augmentation.csv").is_file():
+        return
+    preview_path = root / "augmentation_preview.png"
+    if not preview_path.is_file():
+        raise ValueError(
+            "augmentation.csv exists but augmentation_preview.png is missing."
+        )
+    try:
+        with Image.open(preview_path) as preview:
+            if preview.format != "PNG":
+                raise ValueError("augmentation_preview.png must use PNG format.")
+            preview.verify()
+        with Image.open(preview_path) as preview:
+            preview.load()
+            if preview.width < 1 or preview.height < 1:
+                raise ValueError("augmentation_preview.png has invalid dimensions.")
+    except (OSError, UnidentifiedImageError) as exc:
+        raise ValueError(f"Unreadable augmentation preview: {exc}") from exc
+
+
+# Audio validation
+
+
+def test_audio_manifests(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    target_col: str | None = None,
+    *,
+    multi_label: bool = False,
+) -> None:
+    """Validate the common schema and keys of audio split manifests."""
+    test_split_schema(train_df, test_df)
+
+    for split_name, split_df in (("Training split", train_df), ("Test split", test_df)):
+        _require_columns(split_df, ["file_name"], dataframe_name=split_name)
+        if split_df["file_name"].isna().any():
+            raise ValueError(f"{split_name} contains missing file_name values.")
+        if split_df["file_name"].duplicated().any():
+            duplicates = split_df.loc[
+                split_df["file_name"].duplicated(keep=False), "file_name"
+            ].astype(str)
+            raise ValueError(
+                f"{split_name} contains duplicate file_name values: "
+                f"{duplicates.unique()[:10].tolist()}."
+            )
+
+    shared_paths = set(train_df["file_name"]).intersection(test_df["file_name"])
+    if shared_paths:
+        raise ValueError(
+            "Train and test reference the same file_name values: "
+            f"{sorted(map(str, shared_paths))[:10]}."
+        )
+
+    if target_col is None:
+        return
+
+    _test_manifest_target_coverage(
+        train_df, test_df, target_col, multi_label=multi_label
+    )
+
+
+def _resolve_audio_path(output_dir: Path, file_name: object, split_name: str) -> Path:
+    if not isinstance(file_name, str) or not file_name.strip():
+        raise ValueError(f"{split_name} contains an empty or non-string file_name.")
+    if "\\" in file_name:
+        raise ValueError(
+            f"{split_name} file_name must use portable POSIX separators: {file_name!r}."
+        )
+
+    relative_path = Path(file_name)
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise ValueError(
+            f"{split_name} file_name must be a safe relative path: {file_name!r}."
+        )
+    expected_prefix = (split_name, "audio")
+    if len(relative_path.parts) < 3 or relative_path.parts[:2] != expected_prefix:
+        raise ValueError(
+            f"{split_name} file_name must stay below {split_name}/audio/: "
+            f"{file_name!r}."
+        )
+
+    path = output_dir / relative_path
+    try:
+        resolved = path.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise ValueError(f"Referenced audio does not exist: {file_name!r}.") from exc
+
+    resolved_output = output_dir.resolve()
+    if resolved_output not in resolved.parents:
+        raise ValueError(f"Referenced audio escapes output_dir: {file_name!r}.")
+    if not resolved.is_file():
+        raise ValueError(f"Referenced audio is not a file: {file_name!r}.")
+    return resolved
+
+
+def _has_audio_signature(path: Path, suffix: str) -> bool:
+    header = path.read_bytes()[:64]
+    if suffix == ".wav":
+        return (
+            len(header) >= 12
+            and header[:4] in {b"RIFF", b"RF64"}
+            and header[8:12] == b"WAVE"
+        )
+    if suffix in {".aif", ".aiff"}:
+        return (
+            len(header) >= 12
+            and header[:4] == b"FORM"
+            and header[8:12] in {b"AIFF", b"AIFC"}
+        )
+    if suffix == ".flac":
+        return header.startswith(b"fLaC")
+    if suffix == ".m4a":
+        return len(header) >= 12 and header[4:8] == b"ftyp"
+    if suffix == ".mp3":
+        return header.startswith(b"ID3") or (
+            len(header) >= 2 and header[0] == 0xFF and header[1] & 0xE0 == 0xE0
+        )
+    if suffix == ".aac":
+        return header.startswith(b"ADIF") or (
+            len(header) >= 2 and header[0] == 0xFF and header[1] & 0xF6 == 0xF0
+        )
+    if suffix == ".ogg":
+        return header.startswith(b"OggS")
+    if suffix == ".opus":
+        return header.startswith(b"OggS") and b"OpusHead" in header
+    return False
+
+
+def _validate_wav_structure(path: Path, file_name: str) -> None:
+    import wave
+
+    try:
+        with wave.open(str(path), "rb") as stream:
+            if (
+                stream.getnchannels() <= 0
+                or stream.getframerate() <= 0
+                or stream.getsampwidth() <= 0
+                or stream.getnframes() <= 0
+            ):
+                raise ValueError("WAV contains no usable audio frames")
+            stream.readframes(stream.getnframes())
+    except (EOFError, OSError, ValueError, wave.Error) as exc:
+        raise ValueError(f"Unreadable audio: {file_name!r}: {exc}") from exc
+
+
+def test_audio_files(
+    manifest_df: pd.DataFrame,
+    output_dir: str | Path,
+    split_name: str,
+) -> dict[str, str]:
+    """Require every manifest audio asset to be safe, present, and recognizable."""
+    _require_dataframe(manifest_df, f"{split_name} manifest")
+    _require_columns(
+        manifest_df, ["file_name"], dataframe_name=f"{split_name} manifest"
+    )
+    root = Path(output_dir)
+    if not root.is_dir():
+        raise ValueError(f"output_dir is not a directory: {root}.")
+
+    hashes: dict[str, str] = {}
+    for file_name in manifest_df["file_name"]:
+        path = _resolve_audio_path(root, file_name, split_name)
+        suffix = path.suffix.lower()
+        if suffix not in SUPPORTED_AUDIO_EXTENSIONS:
+            raise ValueError(
+                f"Unsupported audio extension for {file_name!r}: {suffix!r}."
+            )
+        if not _has_audio_signature(path, suffix):
+            raise ValueError(
+                f"Audio signature does not match extension for {file_name!r}."
+            )
+        if suffix == ".wav":
+            _validate_wav_structure(path, file_name)
+        hashes[file_name] = hashlib.sha256(path.read_bytes()).hexdigest()
+    return hashes
+
+
+def test_audio_directory_matches_manifest(
+    manifest_df: pd.DataFrame,
+    output_dir: str | Path,
+    split_name: str,
+) -> None:
+    """Require an exact match between manifest paths and exported audio files."""
+    _require_dataframe(manifest_df, f"{split_name} manifest")
+    _require_columns(
+        manifest_df, ["file_name"], dataframe_name=f"{split_name} manifest"
+    )
+    root = Path(output_dir)
+    audio_dir = root / split_name / "audio"
+    expected = set(manifest_df["file_name"].tolist())
+    actual = {
+        path.relative_to(root).as_posix()
+        for path in audio_dir.rglob("*")
+        if path.is_file() or path.is_symlink()
+    }
+    missing = sorted(expected - actual, key=str)
+    unexpected = sorted(actual - expected)
+    if missing or unexpected:
+        raise ValueError(
+            f"{split_name} audio directory does not match its manifest; "
+            f"missing files: {missing[:10]}, "
+            f"files not declared in manifest: {unexpected[:10]}."
+        )
+
+
+def test_no_within_split_audio_duplicates(
+    file_hashes: dict[str, str],
+    split_name: str,
+) -> None:
+    """Reject differently named, byte-identical audio files in one split."""
+    duplicates = _duplicate_digest_groups(file_hashes)
+    if duplicates:
+        raise ValueError(
+            f"Found byte-identical audio files within {split_name}; "
+            f"examples: {duplicates[:10]}."
+        )
+
+
+def test_no_cross_split_audio_duplicates(
+    train_hashes: dict[str, str],
+    test_hashes: dict[str, str],
+) -> None:
+    """Reject byte-identical audio content shared across train and test."""
+    train_by_hash = {digest: name for name, digest in train_hashes.items()}
+    test_by_hash = {digest: name for name, digest in test_hashes.items()}
+    shared_hashes = set(train_by_hash).intersection(test_by_hash)
+    if shared_hashes:
+        examples = [
+            (train_by_hash[digest], test_by_hash[digest])
+            for digest in sorted(shared_hashes)[:10]
+        ]
+        raise ValueError(
+            f"Found {len(shared_hashes)} byte-identical audio file(s) across train "
+            f"and test; examples: {examples}."
+        )
+
+
+def test_audio_validation(
+    output_dir: str | Path,
+    target_col: str | None = None,
+    *,
+    multi_label: bool = False,
+    list_columns: Sequence[str] | None = None,
+    check_content_overlap: bool = True,
+) -> None:
+    """Run generic gatekeeper checks for exported audio train/test splits."""
+    root = Path(output_dir)
+    train_path = root / "train.csv"
+    test_path = root / "test.csv"
+    for path in (train_path, test_path):
+        if not path.is_file():
+            raise ValueError(f"Required audio manifest is missing: {path}.")
+
+    for split_name in ("train", "test"):
+        audio_dir = root / split_name / "audio"
+        if not audio_dir.is_dir():
+            raise ValueError(f"Required audio directory is missing: {audio_dir}.")
+        if not any(path.is_file() for path in audio_dir.rglob("*")):
+            raise ValueError(f"Required audio directory is empty: {audio_dir}.")
+
+    train_df = pd.read_csv(train_path)
+    test_df = pd.read_csv(test_path)
+    test_audio_manifests(
+        train_df, test_df, target_col, multi_label=multi_label
+    )
+    _test_inline_list_columns(train_df, test_df, list_columns)
+    train_hashes = test_audio_files(train_df, root, "train")
+    test_hashes = test_audio_files(test_df, root, "test")
+    test_audio_directory_matches_manifest(train_df, root, "train")
+    test_audio_directory_matches_manifest(test_df, root, "test")
+    test_no_within_split_audio_duplicates(train_hashes, "train")
+    test_no_within_split_audio_duplicates(test_hashes, "test")
+    if check_content_overlap:
+        test_no_cross_split_audio_duplicates(train_hashes, test_hashes)
 
 
 # Croissant helpers

@@ -135,6 +135,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=False,
         help="Enable the selected prompt's augmentation subprompt (default: disabled).",
     )
+    parser.add_argument(
+        "--test",
+        action="store_true",
+        help="Print the composed system prompt before running the pipeline normally.",
+    )
     return parser
 
 
@@ -203,7 +208,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         model_id = "kit.mistral-small-4-119b-a8b"
     else:
         model_id = (
-            "mimo-v2.5-free"
+            "mimo-v2.6-flash-free"
             if args.harness == "opencode"
             else "devstral-2-123b-instruct-2512"
         )
@@ -230,9 +235,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         data_augmentation=args.data_augmentation,
     )
     try:
-        config.load_system_prompt()
+        system_prompt = config.load_system_prompt()
     except (FileNotFoundError, ValueError) as exc:
         parser.error(str(exc))
+    if args.test:
+        print("\n--- System prompt ---", flush=True)
+        print(system_prompt, flush=True)
+        print("--- End system prompt ---\n", flush=True)
     pipeline = DataEngineeringPipeline(
         retriever=DcatApHubRetriever(verbose=not args.quiet_download),
         harness=_create_harness(

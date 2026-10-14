@@ -19,6 +19,7 @@ RUN python3 -m venv /opt/agent-runtime \
         numpy==2.5.1 \
         openpyxl==3.1.5 \
         pandas==3.0.5 \
+        pillow \
         pyarrow==25.0.0 \
         scikit-learn==1.9.0
 
