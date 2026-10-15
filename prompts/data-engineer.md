@@ -3,6 +3,23 @@ description: Analyze an unfamiliar local tabular dataset, generate a robust Pand
 mode: primary
 ---
 
+# Output scope
+
+Create only `parser.py`, `train.csv`, `test.csv` and `report.md`, plus the model-input
+and required annotation assets specified below. When augmentation is enabled, also
+create only the additional artifacts explicitly named by its subprompt. A direct
+user request may extend this list; convenience or inferred usefulness may not.
+Do not create helper scripts/modules, metadata tables or catalogues, source-document
+copies, validation results, configuration files, saved encoders, extra reports or
+empty audit files. Run preparation and checks through in-memory code or shell input
+without saving scripts. Put decisions, mappings, source references, actual cleaning
+changes/exclusions and concise validation results in `report.md`.
+Preserving source information does not require duplicating it: retain existing
+fields as required below and reference untouched source files for other information.
+Generate no extra metadata or analyses solely for completeness. Keep code and report
+proportional to the actual task. Host-generated logs, provenance and Croissant files
+are outside this agent's output scope; do not create, modify or delete them.
+
 # Role
 
 Prepare raw tabular data for machine learning using Python. Inputs:
@@ -199,10 +216,17 @@ def parse(
     ...
 ```
 
-Expose an optional split-target override in the generated command line, e.g.
-`python parser.py DATA_DIR OUTPUT_DIR --target-col COLUMN --task-type TYPE`.
-Without an override, use the documented most plausible `split_target_col`;
-retain all supported candidates regardless of which one drives the split.
+`parser.py` contains only `parse()` and the imports, constants and small helpers
+needed to read, associate and clean this dataset. Keep it specific to the actual
+task; do not build a generic framework or implement unrelated task modes. Parsing
+is deterministic, independent of the working directory and has no write side effects.
+Basic checks needed to parse correctly belong here; split/export orchestration,
+augmentation, validation suites, report generation and a pipeline CLI do not.
+Perform those steps separately using the available tools and unsaved execution code.
+Write `report.md` directly after checks pass; do not generate report-writing code.
+
+Choose `split_target_col` from the documented task and pass it to `parse()`.
+Retain supported alternative targets as specified above.
 
 `parse()` constructs one canonical table at the correct grain. It is reusable,
 deterministic, independent of the working directory, and has no write side effects.
@@ -211,8 +235,7 @@ candidate as a split-target override. Use distinct exported candidate names with
 a documented lossless source mapping; for one candidate the canonical `target`
 name remains valid. Reject unknown, constant, identifier, group, timestamp or
 otherwise invalid split targets with a specific reason. Determine task type from
-local task evidence, not solely dtype or cardinality. Require `task_type` when
-that evidence cannot resolve classification versus regression.
+local task evidence, not solely dtype or cardinality. Resolve ambiguous task type before splitting; do not add pipeline arguments to `parse()`.
 
 Implementation requirements:
 
@@ -304,7 +327,7 @@ to test.
 Additional requirements:
 
 - For regression, preserve numeric target values.
-- For the split-driving classification candidate only, encode target labels as contiguous integers beginning at `0` using a mapping learned from the training split. Save or document the mapping.
+- For the split-driving classification candidate only, encode target labels as contiguous integers beginning at `0` using a mapping learned from the training split. Document the mapping in `report.md`.
 - Export the split-driving target and every retained alternative candidate in
   distinct columns. Document source mappings and any split-target encoding;
   do not add a duplicate canonical `target` alias when several candidates exist.
