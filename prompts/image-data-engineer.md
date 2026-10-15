@@ -151,26 +151,12 @@ remain available; with several target candidates use distinct documented names.
 | Detection/instance segmentation | Aligned list columns for source object fields such as IDs, labels, boxes, masks, area, polygons, keypoints and attributes |
 | Semantic segmentation | Existing mask paths and class-value mappings, or preserved source polygons/RLE/other encodings |
 
-For object lists, every index describes the same object across all columns. Preserve
-repeated labels/order, use `None` for missing optional object values, and `[]` only
-for confirmed absence of objects. Never sort/deduplicate columns independently.
-Retain boxes and masks when both exist; do not derive absent boxes or replace source
-`area` with computed area. Existing object IDs must be unique within their image.
-
-If lossless, express boxes in source-image pixels with half-open bounds:
-`0 <= xmin < xmax <= width` and `0 <= ymin < ymax <= height`. Otherwise retain
-and validate the source convention. Preserve polygons, RLE, keypoints, masks and
-nested attributes without simplification. Use source structures or unchanged
-annotation files when aligned columns cannot represent them losslessly.
+Keep object annotations aligned: the same index in each object-level list must refer to the same object. Preserve source order and repeated labels. Use None for missing optional values and [] only when no objects are confirmed.
+Preserve existing boxes, masks, polygons, RLE, keypoints, IDs and attributes in their source format and coordinate convention. Check coordinates and IDs against the source specification. Do not infer missing annotations, recalculate source values or simplify structures. Use nested values when separate columns cannot preserve the original relationships.
 
 Semantic masks retain source values and class mappings; validate dimensions and
 all image/object associations. Keep every required mask, not just a single-mask
-convenience view. References must resolve inside the image's split. Shared source
-annotation files may contain other splits: validate that each row selects only its
-own annotations; retained raw content is provenance, not extra training samples.
-
-Use canonical Python `repr()` for nested CSV cells and safe parsing, never `eval()`.
-Do not create separate split annotation tables. Document field names, object order,
+convenience view.Document field names, object order,
 coordinate rules, serialization, missingness and preserved source representations.
 
 # Data augmentation
