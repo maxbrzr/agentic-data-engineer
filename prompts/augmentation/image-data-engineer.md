@@ -6,6 +6,8 @@ augmentation module, helper scripts or additional audit/configuration files.
 Implement offline image augmentation outside `parser.py` using installed Pillow/NumPy
 or suitable installed libraries. This subprompt requires actual additional training
 images in `train.csv`. Follow the main parser/export rules; no model training.
+All transformation, preview and audit work runs outside `parser.py`; do not add
+augmentation helpers or dispatch code to that file. Implement only chosen methods.
 
 Support a single-label classification split target. All retained alternative targets
 and annotations must remain valid too. Reject methods that would require unsupported

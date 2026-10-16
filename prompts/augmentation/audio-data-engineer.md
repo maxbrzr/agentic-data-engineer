@@ -1,11 +1,9 @@
 ### Objective and scope
 
-Follow the main output allowlist. Use unsaved execution code; do not create an
-augmentation module, helper scripts or additional audit/configuration files.
 
-Implement offline augmentation outside `parser.py`: this subprompt requires actual
+Implement offline augmentation in `parser.py`: this subprompt requires actual
 additional training variants in `train.csv`. Follow the main prompt's parser,
-representation, source-preservation and validation rules. No model training is needed.
+representation, source-preservation and validation rules. 
 
 Support a single-label classification split target. Every available alternative
 target and annotation must also remain valid. If a method would change one, reject
@@ -40,7 +38,7 @@ methods. Use a selected method per derivative; SpecAugment is a named composite.
 | Spectrogram Mixup | Weighted sum of matrices with matching feature definitions and documented time alignment. |
 | SpecAugment | Combine time/frequency masking and optionally time warping. State the components; the original method includes warping. |
 
-Apply waveform methods only to audio inputs and feature methods only to existing
+Apply waveform methods only to audio inputs and Time-frequency methods only to existing
 Mel/log-Mel matrices. Do not extract new spectrograms from audio. Keep channel
 operations synchronized. Record mask positions/fill values and warp mappings;
 zero in a log-spectrogram need not mean silence. Never reconstruct augmented Mel
