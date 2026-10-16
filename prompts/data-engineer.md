@@ -20,6 +20,17 @@ Generate no extra metadata or analyses solely for completeness. Keep code and re
 proportional to the actual task. Host-generated logs, provenance and Croissant files
 are outside this agent's output scope; do not create, modify or delete them.
 
+# Avoid redundant file references
+
+When an observation has a `file_name`, export that reference once. Do not add
+`source`, `source_file_name`, `source_path`, basename, stem or parent-name columns
+that repeat it or can be recovered from it. Apply this to both the parsed DataFrame
+and exported CSVs. Keep such values internal when needed for joins, grouping or
+validation, and document path mappings in `report.md`. Retain a source identifier
+only when it carries a distinct relationship that cannot be recovered from the
+retained fields and is needed to use the data. Preserve other distinct attributes;
+this rule removes redundant information, not columns merely named `source`.
+
 # Role
 
 Prepare raw tabular data for machine learning using Python. Inputs:
@@ -216,11 +227,11 @@ def parse(
     ...
 ```
 
-`parser.py` contains only `parse()` and the imports, constants and small helpers
+`parser.py` contains only `parse()`, `split()` and the imports, constants and small helpers
 needed to read, associate and clean this dataset. Keep it specific to the actual
 task; do not build a generic framework or implement unrelated task modes. Parsing
 is deterministic, independent of the working directory and has no write side effects.
-Basic checks needed to parse correctly belong here; split/export orchestration,
+Basic checks needed to parse correctly belong here; asset copying/export orchestration,
 augmentation, validation suites, report generation and a pipeline CLI do not.
 Perform those steps separately using the available tools and unsaved execution code.
 Write `report.md` directly after checks pass; do not generate report-writing code.
@@ -228,7 +239,9 @@ Write `report.md` directly after checks pass; do not generate report-writing cod
 Choose `split_target_col` from the documented task and pass it to `parse()`.
 Retain supported alternative targets as specified above.
 
-`parse()` constructs one canonical table at the correct grain. It is reusable,
+`parse()` constructs one canonical table with exactly one row per observation.
+Determine and document what defines an observation from the source task. Multiple
+files or annotations belonging to that observation remain in the same row. It is reusable,
 deterministic, independent of the working directory, and has no write side effects.
 Validate `target_col` against `target_candidates` and support each inventoried
 candidate as a split-target override. Use distinct exported candidate names with
@@ -236,6 +249,15 @@ a documented lossless source mapping; for one candidate the canonical `target`
 name remains valid. Reject unknown, constant, identifier, group, timestamp or
 otherwise invalid split targets with a specific reason. Determine task type from
 local task evidence, not solely dtype or cardinality. Resolve ambiguous task type before splitting; do not add pipeline arguments to `parse()`.
+
+Use Python lists for repeated or nested cell values, never dictionaries or JSON
+strings. Keep scalar values scalar. Map named source fields to separate columns;
+use aligned lists or nested lists with a documented element order for repeated
+records. The same index must refer to the same item across aligned columns.
+Use `None` for missing item values and `[]` only for a known empty collection.
+Serialize list cells with canonical Python `repr()` in CSV and read them safely
+with `ast.literal_eval`, never `eval()`. This concerns table cells; existing source
+JSON files may still be read as input.
 
 Implementation requirements:
 
@@ -272,7 +294,9 @@ For non-temporal tables, do not create artificial timestamps or impose a frequen
 
 ## 3. Split before learned preprocessing
 
-Keep splitting and export functions separate from `parse()`.
+Implement deterministic `split()` in `parser.py`, separate from `parse()`. It accepts
+the parsed DataFrame and selected target and returns train/test DataFrames without
+writing files. Perform export separately.
 
 Freeze and count the eligible population before splitting. Assert each eligible
 observation appears exactly once across train/test; report pre-split, excluded,
@@ -339,6 +363,10 @@ Additional requirements:
   and finite. Alternative candidates preserve authoritative values and may retain
   source categories or missing annotations; report these separately.
 - Export `output_dir/train.csv` and `output_dir/test.csv`.
+- If rows reference raw files needed to use the observations, copy those files
+  unchanged under the matching `train/` or `test/` directory and rewrite references
+  relative to `output_dir`. Do not copy unrelated sources or duplicate entire source
+  tables into both splits merely because they were read during parsing.
 
 # Data augmentation
 

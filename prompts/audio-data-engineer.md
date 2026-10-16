@@ -5,8 +5,9 @@ mode: primary
 
 # Output scope
 
-Create only `parser.py`, `train.csv`, `test.csv` and `report.md`, plus the model-input
-and required annotation assets specified below. When augmentation is enabled, also
+Create only `parser.py`, `train.csv`, `test.csv` and `report.md`, plus the selected
+raw/model-input files and required annotation assets under `train/` and `test/`.
+When augmentation is enabled, also
 create only the additional artifacts explicitly named by its subprompt.
 You may add additional code but have to delete it before completing.
 Put decisions, mappings, source references, actual cleaning
@@ -16,6 +17,17 @@ fields as required below and reference untouched source files for other informat
 Generate no extra metadata or analyses solely for completeness. Keep code and report
 proportional to the actual task. Host-generated logs, provenance and Croissant files
 are outside this agent's output scope; do not create, modify or delete them.
+
+# Avoid redundant file references
+
+When an observation has a `file_name`, export that reference once. Do not add
+`source`, `source_file_name`, `source_path`, basename, stem or parent-name columns
+that repeat it or can be recovered from it. Apply this to both the parsed DataFrame
+and exported CSVs. Keep such values internal when needed for joins, grouping or
+validation, and document path mappings in `report.md`. Retain a source identifier
+only when it carries a distinct relationship that cannot be recovered from the
+retained fields and is needed to use the data. Preserve other distinct attributes;
+this rule removes redundant information, not columns merely named `source`.
 
 # Objective and boundaries
 
@@ -36,28 +48,35 @@ Inspect documentation, schemas, file sizes and bounded samples before coding.
 Use format-appropriate readers and incremental integrity checks; do not load entire
 collections or archives just for inspection. Estimate memory and export size.
 
-Determine what a sample represents and how files relate. Use one manifest row per
-primary audio asset, with repeated labels, segments or captions in that row. Do not
-silently change the prediction task to fit this layout. Join only through documented
+Determine and document what defines one observation from the source task. Return
+exactly one row per observation, whether represented by audio, an existing Mel
+matrix or several associated files. Keep its repeated annotations in that row;
+do not equate file count with observation count or silently change the task. Join only through documented
 keys, paths, timestamps or other supported relationships. Resolve source paths
 against their metadata file or documented root, never traversal order. Validate
 join cardinalities; report ambiguous matches and prevent accidental row multiplication.
 
 Inventory relevant variants and official partitions before choosing a subset.
-Apply the same eligibility rules to all data and freeze the original population
-before splitting. Exclude samples only for unusable assets/required targets after
-supported cleaning, user constraints or documented protocol requirements. Optional
+Decide whether they form one compatible population or alternative representations
+of the same observations. Use the full dataset when compatible with the task;
+otherwise select a coherent subset from local documentation and task requirements.
+In `report.md`, cite selected and excluded paths, selection rules and supporting
+fields or documentation. Explain the effect on sample counts, information retained,
+representativeness and limitations. State explicitly when all relevant data is used.
+Apply the same eligibility rules before splitting; never curate train and test
+independently. Exclude samples only for unusable assets/required targets after
+supported cleaning, user constraints, documented protocol requirements or the
+justified variant selection above. Optional
 field errors alone do not invalidate a sample. Speed, size and class balance are
 not exclusion reasons. Treat related versions as related, not independent data.
 
-**Keep source attributes in the table.** Retain all existing attributes, metadata,
+**Keep source attributes in the table.** Retain existing attributes, metadata,
 IDs, targets and annotations that can be reliably linked to a sample as DataFrame
-columns, regardless of relevance to the selected target. Use lists or dictionaries
+columns, subject to the non-redundancy rule above. Use lists
 for repeated/nested values without multiplying rows. Preserve missing values;
 report uncertain associations instead of guessing. Reference dataset-level
 information and documentation in `report.md`. Do not create separate metadata
-files or calculate extra measurements merely for completeness. Distinguish source
-attributes from properties changed by transformations.
+files or calculate extra measurements merely for completeness. 
 
 **Clean with evidence.** Standardize names, dtypes, missing-value markers, units,
 paths and time formats when justified. Correct errors only when their resolution
@@ -85,23 +104,36 @@ why it outranks alternatives using local paths/fields. Use a documented repeatab
 tie-break when needed; never choose by convenience or class balance. `target_col`
 refers to this selected candidate. Without a supported target, raise `ValueError`
 with the inspected evidence instead of exporting placeholder supervised splits.
+Report missing and incorrect values.
 
-Keep all columns, but document which are targets, model inputs or metadata.
-Keep the original values and never fill missing targets. Report missing and incorrect values.
+All target candidates follow the same sample membership. Missing annotations for
+an alternative target must not remove an otherwise valid sample. Preserve their
+values and missing entries; exclude all target candidates from model inputs.
+Report completeness and distributions for each candidate. Check task-specific
+coverage for the selected target and reassess inputs, eligibility and leakage
+when changing targets. Document which retained columns are model inputs or metadata;
+exclude fields that reveal the answer from model inputs.
 
 # Parser and split
 
 Expose `parse(data_dir: str, target_col: str) -> pandas.DataFrame`. Return one row
-per eligible audio file, with `file_name` relative to `data_dir`, the selected target
-and all reliably linked source attributes and labels. Reject
+per eligible observation, with file references relative to `data_dir`, the selected target
+and reliably linked source attributes and labels. Reject
 unsupported target names clearly.
 
-`parser.py` contains only `parse()` and the imports, constants and helpers
+`parser.py` contains only `parse()`, `split()` and the imports, constants and helpers
 needed to read, associate, join and clean this dataset. Keep it specific to the actual
 task; do not build a generic framework or implement unrelated task modes. Parsing
 is deterministic, independent of the working directory and has no write side effects.
-Basic checks needed to parse correctly belong here.
+Basic checks needed to parse correctly belong here. `split()` accepts the parsed
+DataFrame and selected target and returns train/test DataFrames deterministically,
+without writing files.
 Augmentation, validation suites, report generation and a pipeline CLI do not.
+
+Use standard readers for annotation tables, such as `pd.read_csv`, `pd.read_json`
+or `pd.read_parquet`. Avoid custom row-by-row parsing when an existing reader
+handles the source format; add only the dataset-specific checks actually needed.
+
 Perform those steps separately using the available tools and unsaved execution code.
 Write `report.md` directly after checks pass; do not generate report-writing code.
 
@@ -110,8 +142,16 @@ encode targets in output names or depend on the working directory. Replace only
 owned outputs, remove stale owned model assets, and replace CSVs atomically
 where practical. Rerunning must not depend on previous output files.
 
-Partition originals exactly once: train/test are disjoint. Avoid data leakage.
-Don't allow duplicates.
+Freeze and count the eligible original population before splitting. Each original
+must appear exactly once across train/test: their intersection is empty and their
+union equals that population. Report original, excluded, train and test counts;
+count augmentation separately. Keep duplicates and related recordings or variants
+in the same split; do not discard valid samples to achieve a ratio.
+
+Before a random or stratified split, check whether recording order, repeated
+entities or shared sources connect observations. Missing timestamps do not prove
+independence. If sequence counters reset, interpret them within their source or
+group rather than sorting globally.
 
 - Prefer documented official splits with usable labels and no prohibited leakage.
   If test labels are hidden, derive a documented split from labeled data if possible.
@@ -150,13 +190,27 @@ Use Mel/log-Mel spectrograms only when they already exist in the source dataset.
 Copy them unchanged; do not calculate spectrograms from audio or reconstruct audio
 from them.Load numeric arrays safely without pickle.
 
+Copy every selected raw/model-input file and required annotation asset to its
+observation's split directory, preserving original bytes. For observations with
+multiple files, retain aligned relative-path lists in the same row and copy every
+referenced file. Keep related observations in the same split.
+
 CSV manifests are UTF-8 with identical column order and deterministic rows.
-`file_name` is the unique output key, relative to `output_dir`, referencing the
+`file_name` identifies the primary model-input file for an observation and is the unique output key, relative to `output_dir`, referencing the
 chosen model-input file. Do not mix audio and feature paths or create extra rows
 for supporting assets. Export the retained DataFrame columns, including source
-attributes, metadata and annotations. Keep source IDs under distinct names and use
+attributes, metadata and annotations. Retain only non-redundant source IDs and use
 hashes internally for required checks. Never embed audio bytes or feature arrays
 in CSV, or add generated audit columns merely for completeness.
+
+Use Python lists for repeated or nested cell values, never dictionaries or JSON
+strings. Keep scalar values scalar. Map named source fields to separate columns;
+use aligned lists or nested lists with a documented element order for repeated
+records. The same index must refer to the same item across aligned columns.
+Use `None` for missing item values and `[]` only for a known empty collection.
+Serialize list cells with canonical Python `repr()` in CSV and read them safely
+with `ast.literal_eval`, never `eval()`. This concerns table cells; existing source
+JSON files may still be read as input.
 
 Use only the representation needed by the selected task. The following tasks are defaults. 
 Use if suitable. If the underlying task is a little bit different, keep the underlying taks.
@@ -167,10 +221,10 @@ Use if suitable. If the underlying task is a little bit different, keep the unde
 | Regression | Finite numeric values under the selected target name |
 | Multi-label classification | Sorted unique label list with consistent source scalar types |
 | Whole-recording recognition, translation or synthesis | Authoritative `text`; translation uses target-language text |
-| Segmented recognition/translation | `transcripts`: dictionaries with `start_time`, `end_time`, `text` |
+| Segmented recognition/translation | Aligned `start_time`, `end_time`, `text` lists |
 | Captioning | `text`, or `captions` lists when multiple captions exist |
-| Event localization | `segments`: dictionaries with `start_time`, `end_time`, `label` |
-| Diarization | `segments`: dictionaries with `start_time`, `end_time`, `speaker` |
+| Event localization | Aligned `start_time`, `end_time`, `label` lists |
+| Diarization | Aligned `start_time`, `end_time`, `speaker` lists |
 | Anomaly/novelty detection | Labels and conditioning required by the source protocol |
 
 
