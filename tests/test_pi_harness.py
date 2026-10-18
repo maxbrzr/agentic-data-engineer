@@ -172,7 +172,10 @@ class PiHarnessTests(unittest.TestCase):
             harness = PiHarness(PiSettings(project_root=root))
 
             with self.assertRaisesRegex(RuntimeError, "KIT_AI_API_KEY"):
-                harness.run(request, ModelConfig("kit", "kit.gpt-oss-120b"))
+                harness.run(
+                    request,
+                    ModelConfig("kit", "kit.glm-5.3-flash"),
+                )
 
     def test_retries_transient_provider_error_event(self):
         attempts = []

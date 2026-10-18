@@ -194,7 +194,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.model:
         model_id = args.model
     elif provider_id == "kit":
-        model_id = "kit.mistral-small-4-119b-a8b"
+        model_id = "kit.glm-5.3-flash"
     else:
         model_id = (
             "deepseek-v4-flash-free"

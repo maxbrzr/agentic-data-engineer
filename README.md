@@ -81,13 +81,13 @@ KIT_AI_API_KEY=your-current-api-key
 ```
 
 The `kit` provider intentionally exposes only the local KIT-hosted models that
-the SCC currently lists without per-token charges:
+the SCC currently lists without per-token charges. Consult the
+[SCC model table](https://www.scc.kit.edu/dienste/ki-toolbox.php#KI-Modelle)
+for the authoritative current list:
 
-- `kit.gpt-oss-120b`
 - `kit.mistral-small-4-119b-a8b`
-- `kit.gemma4-31b-it`
-- `kit.qwen3.5-397b-A17b`
-- `kit.minimax-m2.7-229b`
+- `kit.deepseek-v4-flash`
+- `kit.glm-5.3-flash`
 
 Run one of them with either harness:
 
@@ -95,18 +95,21 @@ Run one of them with either harness:
 uv run --extra opencode agentic-data-engineer \
   --example tcm-predictive-maintenance \
   --provider kit \
-  --model kit.mistral-small-4-119b-a8b
+  --model kit.glm-5.3-flash
 
 uv run agentic-data-engineer \
   --harness pi \
   --example tcm-predictive-maintenance \
   --provider kit \
-  --model kit.mistral-small-4-119b-a8b
+  --model kit.glm-5.3-flash
 ```
 
-The SCC has announced that all listed local models except Mistral Small 4 will
-be retired at the end of August 2026. Check the current model table before
-selecting a model if a configured ID stops working.
+`kit.glm-5.3-flash` is selected by default when `--provider kit` is used
+without an explicit `--model`.
+
+KIT changes the available models over time. Check the SCC model table if a
+configured model ID stops working; the older ZML model overview is no longer
+maintained.
 
 ## Optional Pi harness
 

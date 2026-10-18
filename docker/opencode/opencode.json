@@ -67,20 +67,14 @@
         "apiKey": "{env:KIT_AI_API_KEY}"
       },
       "models": {
-        "kit.gpt-oss-120b": {
-          "name": "GPT-OSS 120B (local KIT)"
-        },
         "kit.mistral-small-4-119b-a8b": {
           "name": "Mistral Small 4 119B (local KIT)"
         },
-        "kit.gemma4-31b-it": {
-          "name": "Gemma 4 31B IT (local KIT)"
+        "kit.deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash (local KIT)"
         },
-        "kit.qwen3.5-397b-A17b": {
-          "name": "Qwen3.5 397B A17B (local KIT)"
-        },
-        "kit.minimax-m2.7-229b": {
-          "name": "MiniMax M2.7 229B (local KIT)"
+        "kit.glm-5.3-flash": {
+          "name": "GLM-5.3 Flash (local KIT)"
         }
       }
     }

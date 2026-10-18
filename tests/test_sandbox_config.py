@@ -22,11 +22,9 @@ EXPECTED_GWDG_MODELS = {
     "qwen3.6-35b-a3b",
 }
 EXPECTED_KIT_MODELS = {
-    "kit.gpt-oss-120b",
     "kit.mistral-small-4-119b-a8b",
-    "kit.gemma4-31b-it",
-    "kit.qwen3.5-397b-A17b",
-    "kit.minimax-m2.7-229b",
+    "kit.deepseek-v4-flash",
+    "kit.glm-5.3-flash",
 }
 
 
@@ -158,7 +156,7 @@ class SandboxConfigurationTests(unittest.TestCase):
             cli,
         )
         self.assertIn('elif provider_id == "kit":', cli)
-        self.assertIn('model_id = "kit.mistral-small-4-119b-a8b"', cli)
+        self.assertIn('model_id = "kit.glm-5.3-flash"', cli)
 
     def test_pi_container_and_remote_models_are_restricted(self):
         dockerfile = (ROOT / "docker" / "pi" / "Dockerfile").read_text(
