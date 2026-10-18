@@ -191,11 +191,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     provider_id = args.provider or (
         "opencode" if args.harness == "opencode" else "gwdg"
     )
-    model_id = args.model or (
-        "deepseek-v4-flash-free"
-        if args.harness == "opencode"
-        else "devstral-2-123b-instruct-2512"
-    )
+    if args.model:
+        model_id = args.model
+    elif provider_id == "kit":
+        model_id = "kit.mistral-small-4-119b-a8b"
+    else:
+        model_id = (
+            "deepseek-v4-flash-free"
+            if args.harness == "opencode"
+            else "devstral-2-123b-instruct-2512"
+        )
     sandbox_manager = None
     if args.harness == "opencode":
         from .agent.opencode_sandbox import OpencodeSandboxManager

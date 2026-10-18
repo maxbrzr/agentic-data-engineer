@@ -69,6 +69,45 @@ You can also export `AGENT_MODEL_PROVIDER` and `AGENT_MODEL_ID` in your shell.
 The API key remains in the ignored `.env` file and is injected into the
 container at runtime.
 
+## Use the KIT KI-Toolbox
+
+KIT students can use the KI-Toolbox after completing the required ILIAS course
+and signing in once at <https://ki-toolbox.scc.kit.edu>. Generate a personal
+API key under `Settings > Accounts > API Key`, then add it to the ignored
+`.env` file:
+
+```dotenv
+KIT_AI_API_KEY=your-current-api-key
+```
+
+The `kit` provider intentionally exposes only the local KIT-hosted models that
+the SCC currently lists without per-token charges:
+
+- `kit.gpt-oss-120b`
+- `kit.mistral-small-4-119b-a8b`
+- `kit.gemma4-31b-it`
+- `kit.qwen3.5-397b-A17b`
+- `kit.minimax-m2.7-229b`
+
+Run one of them with either harness:
+
+```bash
+uv run --extra opencode agentic-data-engineer \
+  --example tcm-predictive-maintenance \
+  --provider kit \
+  --model kit.mistral-small-4-119b-a8b
+
+uv run agentic-data-engineer \
+  --harness pi \
+  --example tcm-predictive-maintenance \
+  --provider kit \
+  --model kit.mistral-small-4-119b-a8b
+```
+
+The SCC has announced that all listed local models except Mistral Small 4 will
+be retired at the end of August 2026. Check the current model table before
+selecting a model if a configured ID stops working.
+
 ## Optional Pi harness
 
 Pi is installed inside its Docker image, so it needs no host installation or

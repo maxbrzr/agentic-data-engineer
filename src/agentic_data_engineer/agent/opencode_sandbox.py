@@ -6,6 +6,11 @@ from pathlib import Path
 from typing import Any
 from urllib.request import urlopen
 
+from .provider_env import (
+    PROVIDER_ENV_REQUIREMENTS,
+    require_provider_environment,
+)
+
 AttestationReader = Callable[[str, Path], dict[str, Any]]
 CommandRunner = Callable[..., Any]
 
@@ -13,7 +18,6 @@ MANAGED_OPENCODE_URLS = {
     "http://127.0.0.1:54321",
     "http://localhost:54321",
 }
-PROVIDER_ENV_REQUIREMENTS = {"gwdg": "SAIA_API_KEY"}
 
 
 def read_sandbox_attestation(
@@ -169,31 +173,7 @@ class OpencodeSandboxManager:
         )
 
     def _require_provider_environment(self, provider: str | None) -> None:
-        env_name = PROVIDER_ENV_REQUIREMENTS.get(provider or "")
-        if env_name is None:
-            return
-        env_path = self.project_root / ".env"
-        if self._env_has_value(env_path, env_name):
-            return
-        raise RuntimeError(
-            f"Provider {provider!r} requires {env_name} in the ignored "
-            f"environment file {env_path}."
-        )
-
-    @staticmethod
-    def _env_has_value(path: Path, name: str) -> bool:
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            return False
-        for line in lines:
-            candidate = line.strip()
-            if not candidate or candidate.startswith("#") or "=" not in candidate:
-                continue
-            key, value = candidate.removeprefix("export ").split("=", 1)
-            if key.strip() == name:
-                return bool(value.strip().strip("'\""))
-        return False
+        require_provider_environment(self.project_root, provider)
 
     @staticmethod
     def _path(value: Any) -> Path | None:

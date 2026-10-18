@@ -26,6 +26,23 @@
         {"id": "qwen3.6-27b", "name": "Qwen 3.6 27B (GWDG SAIA)"},
         {"id": "qwen3.6-35b-a3b", "name": "Qwen 3.6 35B A3B (GWDG SAIA)"}
       ]
+    },
+    "kit": {
+      "baseUrl": "https://ki-toolbox.scc.kit.edu/api/v1",
+      "api": "openai-completions",
+      "apiKey": "$KIT_AI_API_KEY",
+      "authHeader": true,
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {"id": "kit.gpt-oss-120b", "name": "GPT-OSS 120B (local KIT)"},
+        {"id": "kit.mistral-small-4-119b-a8b", "name": "Mistral Small 4 119B (local KIT)"},
+        {"id": "kit.gemma4-31b-it", "name": "Gemma 4 31B IT (local KIT)"},
+        {"id": "kit.qwen3.5-397b-A17b", "name": "Qwen3.5 397B A17B (local KIT)"},
+        {"id": "kit.minimax-m2.7-229b", "name": "MiniMax M2.7 229B (local KIT)"}
+      ]
     }
   }
 }
