@@ -126,7 +126,19 @@ class OpencodeHarness:
                             system=request.system_prompt,
                             timeout=self.settings.timeout_seconds,
                             parts=[{"type": "text", "text": prompt}],
-                            extra_body=dict(model.parameters) or None,
+                            # The Python SDK still serializes legacy top-level
+                            # modelID/providerID. Current OpenCode expects model.
+                            extra_body={
+                                **dict(model.parameters),
+                                "model": {
+                                    "providerID": model.provider_id,
+                                    "modelID": model.model_id,
+                                },
+                                "agent": (
+                                    "build" if self.settings.mode == "Agent"
+                                    else self.settings.mode
+                                ),
+                            },
                         )
                         provider_error = self._latest_provider_error(
                             client,
@@ -134,6 +146,7 @@ class OpencodeHarness:
                         )
                         if provider_error:
                             raise _SessionProviderError(provider_error)
+                        self._validate_response_model(response, model)
                     except Exception as exc:
                         self._join_watcher(watcher)
                         if (
@@ -195,7 +208,9 @@ class OpencodeHarness:
         return AgentRunResult(
             harness=self.name,
             run_id=str(session.id),
-            message_id=str(getattr(response, "id", "")) or None,
+            message_id=str(self._response_field(
+                self._response_info(response), "id"
+            ) or "") or None,
             output_dir=request.output_dir,
             artifacts=artifacts,
             metadata=metadata,
@@ -317,6 +332,37 @@ class OpencodeHarness:
     def _join_watcher(watcher: Thread | None) -> None:
         if watcher is not None:
             watcher.join(timeout=5)
+
+    @staticmethod
+    def _response_field(value, key: str):
+        return value.get(key) if isinstance(value, dict) else getattr(value, key, None)
+
+    @classmethod
+    def _response_info(cls, response):
+        info = cls._response_field(response, "info")
+        return info if info is not None else response
+
+    @classmethod
+    def _validate_response_model(cls, response, model: ModelConfig) -> None:
+        info = cls._response_info(response)
+        provider = (
+            cls._response_field(info, "providerID")
+            or cls._response_field(info, "provider_id")
+        )
+        model_id = (
+            cls._response_field(info, "modelID")
+            or cls._response_field(info, "model_id")
+        )
+        if provider is None or model_id is None:
+            raise ValueError(
+                "OpenCode response did not identify the actual provider/model; "
+                "cannot verify the requested model was used."
+            )
+        if (provider, model_id) != (model.provider_id, model.model_id):
+            raise ValueError(
+                f"OpenCode model mismatch: requested {model.provider_id}/{model.model_id}, "
+                f"but the server used {provider}/{model_id}."
+            )
 
     @staticmethod
     def _missing_outputs(output_dir) -> list[str]:

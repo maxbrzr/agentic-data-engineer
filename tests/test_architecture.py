@@ -509,6 +509,21 @@ class PipelineArchitectureTests(unittest.TestCase):
 
 @unittest.skipIf(OpencodeHarness is None, "OpenCode optional dependency is not installed")
 class OpencodeAdapterTests(unittest.TestCase):
+    def test_model_verification_rejects_silent_default_and_missing_identity(self):
+        requested = ModelConfig("opencode", "deepseek-v4.1-flash-free")
+        with self.assertRaisesRegex(ValueError, "model mismatch"):
+            OpencodeHarness._validate_response_model(
+                SimpleNamespace(info={
+                    "providerID": "kit", "modelID": "kit.mistral-small-4-119b-a8b"
+                }), requested,
+            )
+        with self.assertRaisesRegex(ValueError, "did not identify"):
+            OpencodeHarness._validate_response_model(SimpleNamespace(id="message"), requested)
+        OpencodeHarness._validate_response_model(
+            {"info": {"providerID": requested.provider_id, "modelID": requested.model_id}},
+            requested,
+        )
+
     def test_adapter_translates_neutral_request_and_model(self):
         created_clients = []
         artifact_dir = None
@@ -524,7 +539,7 @@ class OpencodeAdapterTests(unittest.TestCase):
                 self.chat_calls.append((session_id, kwargs))
                 for name in ("parser.py", "train.csv", "test.csv"):
                     (artifact_dir / name).write_text("generated\n", encoding="utf-8")
-                return SimpleNamespace(id="message-1")
+                return SimpleNamespace(id="message-1", **kwargs["extra_body"]["model"])
 
             def messages(self, _session_id):
                 return []
@@ -554,7 +569,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             model = ModelConfig(
                 provider_id="provider-x",
                 model_id="model-y",
-                parameters={"temperature": 0},
+                parameters={"temperature": 0, "model": {"modelID": "wrong"}},
             )
             harness = OpencodeHarness(
                 OpencodeSettings(
@@ -573,7 +588,11 @@ class OpencodeAdapterTests(unittest.TestCase):
             self.assertEqual("session-1", session_id)
             self.assertEqual("provider-x", chat["provider_id"])
             self.assertEqual("model-y", chat["model_id"])
-            self.assertEqual({"temperature": 0}, chat["extra_body"])
+            self.assertEqual({
+                "temperature": 0,
+                "model": {"providerID": "provider-x", "modelID": "model-y"},
+                "agent": "build",
+            }, chat["extra_body"])
             self.assertTrue((output_dir / "opencode_report_session-1.md").is_file())
 
     def test_adapter_continues_idle_session_until_outputs_exist(self):
@@ -595,7 +614,7 @@ class OpencodeAdapterTests(unittest.TestCase):
                             "generated\n",
                             encoding="utf-8",
                         )
-                return SimpleNamespace(id=f"message-{len(self.chat_calls)}")
+                return SimpleNamespace(id=f"message-{len(self.chat_calls)}", **kwargs["extra_body"]["model"])
 
             def messages(self, _session_id):
                 return []
@@ -652,7 +671,7 @@ class OpencodeAdapterTests(unittest.TestCase):
 
             def chat(self, session_id, **kwargs):
                 self.chat_calls.append((session_id, kwargs))
-                return SimpleNamespace(id="incomplete")
+                return SimpleNamespace(id="incomplete", **kwargs["extra_body"]["model"])
 
             def messages(self, _session_id):
                 return []
@@ -717,7 +736,7 @@ class OpencodeAdapterTests(unittest.TestCase):
                     return SimpleNamespace(id=None)
                 for name in ("parser.py", "train.csv", "test.csv"):
                     (artifact_dir / name).write_text("generated\n", encoding="utf-8")
-                return SimpleNamespace(id="retried-message")
+                return SimpleNamespace(id="retried-message", **kwargs["extra_body"]["model"])
 
             def messages(self, _session_id):
                 error = (
@@ -794,7 +813,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             def chat(self, _session_id, **_kwargs):
                 for name in ("parser.py", "train.csv", "test.csv"):
                     (artifact_dir / name).write_text("generated\n", encoding="utf-8")
-                return SimpleNamespace(id="message")
+                return SimpleNamespace(id="message", **_kwargs["extra_body"]["model"])
 
             def messages(self, _session_id):
                 return []

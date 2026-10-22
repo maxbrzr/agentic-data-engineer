@@ -3,6 +3,12 @@ from types import MappingProxyType
 from ..contracts import DatasetSpec
 
 _EXAMPLE_DATASETS = {
+    "heterogeneity-activity-recognition": DatasetSpec(
+        key="heterogeneity-activity-recognition",
+        title="Heterogeneity Activity Recognition",
+        url="https://archive.ics.uci.edu/dataset/344/heterogeneity+activity+recognition",
+        metadata_resource="metadata/heterogeneity-activity-recognition.jsonld",
+    ),
     "tcm-predictive-maintenance": DatasetSpec(
         key="tcm-predictive-maintenance",
         title="TCM: Benchmark Datasets for Predictive Maintenance in Steel Manufacturing",

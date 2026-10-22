@@ -42,15 +42,57 @@ Sources may contain one or several related, nested or schema-inconsistent tables
 in CSV, TSV, delimited TXT, Excel, Parquet, JSON or JSON-LD, with ordinary or
 time-indexed rows.
 
+# Path handling
+
+The dataset and run-output paths supplied in the task are authoritative. Capture
+them once as runtime arguments or variables in the unsaved execution code and
+reuse those values for all tool calls, imports, reads and exports. Pass the supplied
+`dataset_dir` as `data_dir` to `parse()`. Do not retype, abbreviate, spell-correct,
+replace substrings in, or reconstruct either root from a guessed project path.
+Do not assume that the shell or notebook working directory is the project root.
+
+Use `pathlib.Path` and join relative components with `/`; never concatenate path
+strings. For example, in the execution code (not as hard-coded parser constants):
+
+```python
+from pathlib import Path
+
+data_root = Path(data_dir).resolve(strict=True)
+output_root = Path(output_dir).resolve(strict=True)
+assert data_root.is_dir() and output_root.is_dir()
+parser_path = output_root / "parser.py"
+train_path = output_root / "train.csv"
+test_path = output_root / "test.csv"
+```
+
+Before processing, verify the supplied roots and required source files exist.
+Resolve source paths below `data_root` and output paths below `output_root`, and
+check containment after resolution, including symlinks. If a path is missing or
+outside its allowed root, report that exact path and fix the reference using the
+supplied roots. Do not create a guessed project/dataset directory to make it work.
+Use the same `parser_path` when writing and importing the parser; perform export
+through unsaved execution code as specified below. Quote every shell path or path
+variable, including paths containing spaces. Before reporting success, check that
+the required files exist in the exact supplied run-output directory.
+
 # Objective
 
 Create a reproducible processor and ML-ready train/test tables. Determine the
-observation grain, included sources and rows, joins or aggregations, the
+source observation grain, included sources and rows, required joins, the
 best-supported classification or regression task and target, and feature,
 identifier, group, timestamp and leakage roles. Never invent or silently guess a
 target. Retain supported alternative target candidates and select the
 best-supported candidate to drive the shared split as specified below. After successful validation, export `train.csv` and `test.csv`;
 the host then generates Croissant metadata deterministically.
+
+Preserve individual source observations and their measured values. Merge related
+raw tables at their supported observation grain; do not replace raw observations
+with summaries or engineered aggregate features. In particular, do not turn time
+series into window-level means, standard deviations, extrema, RMS values or other
+statistical summaries, even to reduce memory use or obtain a smaller tabular
+dataset. If the only available source observations are already summaries, retain
+that supplied grain and document it; do not invent underlying raw measurements
+or introduce further summarization.
 
 # Target candidates and the shared split
 
@@ -273,22 +315,38 @@ Implementation requirements:
 - Preserve valid numeric values without unnecessary rounding or scaling.
 - Never create an empty, constant, speculative or synthetic target, or discard
   rows merely to pass validation without documenting their invalidity.
-- Keep stable row identifiers internally when needed for reproducibility and split auditing.
+- Retain stable observation keys in the exported tables for reproducibility and split auditing.
 - Exclude all retained target candidates from the model-feature set. Preserve
   their columns as alternative outcomes, not automatically usable predictors.
 
 For time-indexed tables only:
 
-- Normalize timestamp formats and time zones consistently.
-- Sort observations and handle duplicate timestamps deterministically.
-- Align or resample observations only when required by the task.
-- Preserve the natural observation grain when the task does not require a regular time grid.
-- When regularization is required, infer a defensible frequency from local metadata and the observed timestamp intervals. Compare interval distributions within each source or entity; do not rely on a single global median when sampling patterns differ.
-- Prefer an explicitly documented sampling frequency when the data supports it. Otherwise choose a stable observed interval that preserves useful information without unsafe upsampling or excessive interpolation.
-- Before committing to the frequency, estimate the output row count, memory use, observation coverage, and proportion of values that would be aggregated, interpolated, or missing.
-- Record the inferred frequency and the evidence used to select it so the result can be validated and reproduced.
-- Document aggregation, interpolation, tolerance, and fill decisions.
-- Do not create a dense time grid without estimating its size first.
+- The goal is to merge related time series by timestamp into shared observations,
+  with separate measurement columns per source (e.g. accelerometer and gyroscope).
+  Do not substitute concatenation or statistical summaries for temporal alignment.
+- Determine which streams belong to the same entity/device and recording. Check
+  timestamp units, clock origins, resets, sampling intervals and temporal overlap
+  per group; normalize compatible clocks without losing precision. Distinguish
+  measurement time from arrival time. Different sampling rates alone do not rule
+  out a merge, and incompatible groups do not justify skipping compatible ones.
+- Use exact timestamp joins where valid; otherwise use bounded temporal matching
+  with a documented reference stream, tolerance, direction and tie-breaking rule.
+  Never match across incompatible clocks or recording gaps, use target labels to
+  choose matches, or allow accidental many-to-many row multiplication.
+- Export the alignment timestamp, original source timestamps, match offsets and
+  necessary entity/device/recording IDs in both CSVs, even when excluded from model
+  features. Use group IDs plus alignment time as the observation key where valid;
+  verify completeness and uniqueness, adding stable source IDs for distinct samples
+  sharing a timestamp. Sort within each series; do not average duplicates.
+- Preserve raw measurement values and irregular timing. Do not create window
+  statistics or aggregate samples. Interpolation, downsampling or a regular grid
+  requires an explicit task requirement and documented information loss; estimate
+  output size before constructing a grid.
+- Validate and report match coverage, unmatched samples, sample reuse, time offsets
+  and label conflicts per group. Preserve unmatched data with explicit missingness
+  or separately as permitted by the export contract. If reliable alignment or
+  loss-preserving export is impossible, report the specific conflict; do not invent
+  matches, silently drop samples or claim an unaligned export fulfills this goal.
 
 For non-temporal tables, do not create artificial timestamps or impose a frequency.
 
@@ -356,7 +414,9 @@ Additional requirements:
   distinct columns. Document source mappings and any split-target encoding;
   do not add a duplicate canonical `target` alias when several candidates exist.
 - Convert categorical features deterministically and define behavior for categories seen only in the test set.
-- Exclude identifiers that are not meaningful predictive features.
+- Exclude identifiers and timestamps from model inputs when they are not valid
+  predictive features, but retain observation keys, time-series timestamps and
+  required grouping identifiers as metadata columns in the exported CSVs.
 - Avoid global normalization, imputation, feature selection, or aggregation that can leak test information.
 - Ensure both splits are non-empty and have identical columns in identical order.
 - Final model features and the split-driving target must be numeric, complete
@@ -400,8 +460,8 @@ test_tabular_splits(
     validation_test,
     split_target_col,
     task_type="classification",  # or "regression"
-    exclude_from_numeric=[...],  # metadata columns only; never the target
-    key_columns=[...],           # stable observation key when available
+    exclude_from_numeric=[...],  # retained metadata, including time/key columns as needed
+    key_columns=[...],           # validated observation key, including time where appropriate
     group_columns=[...],         # protected entity keys when applicable
     time_col=...,                # only for temporal data
     require_chronological=...,   # true when future-to-past leakage is possible
@@ -444,7 +504,8 @@ Report:
 - The observation grain and inferred ML task.
 - All target candidates, their exported names and task meanings, the
   split-driving candidate, ranking evidence and any tie-break or override.
-- Feature roles, excluded identifiers, and leakage risks removed.
+- Feature roles, identifiers excluded from model inputs, retained timestamp/key
+  columns, key uniqueness checks, and leakage risks removed.
 - Source files included, skipped, rejected, joined, or aggregated.
 - Missing-value, categorical, unit, and type handling.
 - Any temporal processing, if applicable.
