@@ -101,6 +101,28 @@ class FakeMetadataGenerator:
                 raise AssertionError(f"Metadata ran before the agent created {name}")
 
 
+# Datasets without a local folder, so the retriever downloads them. They are not
+# catalog examples; the tests only need specs for remote records.
+TCM_SPEC = DatasetSpec(
+    key="tcm-predictive-maintenance",
+    title="TCM: Benchmark Datasets for Predictive Maintenance in Steel Manufacturing",
+    url="http://data.sdil.de/en/dataset/10-5281-zenodo-11469702",
+)
+CHEMICAL_SPEC = DatasetSpec(
+    key="chemical-process-safety",
+    title="AI-Ready Simulation Dataset for Chemical Process Safety and Accident Prevention",
+    url="http://data.sdil.de/en/dataset/10-5281-zenodo-18200704",
+)
+INDUSTRY5_SPEC = DatasetSpec(
+    key="industry-5-cyber-physical-systems",
+    title=(
+        "Smart Cyber-Physical Systems Dataset for Real-Time Optimization, "
+        "Resilience, and Sustainability in Industry 5.0"
+    ),
+    url="http://data.sdil.de/en/dataset/10-5281-zenodo-18177239",
+)
+
+
 class FakeProcessorChecker:
     """Stands in for the isolated re-run; records what it was asked to check."""
 
@@ -123,13 +145,22 @@ class FakeProcessorChecker:
 class CatalogAndRetrievalTests(unittest.TestCase):
     def test_catalog_contains_configured_examples(self):
         examples = list_examples()
-        self.assertEqual(13, len(examples))
+        self.assertEqual(len(EXAMPLE_DATASETS), len(examples))
         self.assertEqual(set(EXAMPLE_DATASETS), {example.key for example in examples})
         self.assertEqual(examples[0], get_example(examples[0].key))
         self.assertEqual(
             "Predictive Maintenance Engine Data",
             get_example("predictive-maintenance-engine-data").local_dir_name,
         )
+
+    def test_examples_are_local_folders_with_a_record(self):
+        # data/ is not versioned; check the folders only where they exist.
+        data_root = Path(__file__).resolve().parents[1] / "data"
+        for example in list_examples():
+            self.assertTrue(example.local_dir_name, example.key)
+            folder = data_root / example.local_dir_name
+            if data_root.is_dir():
+                self.assertTrue((folder / "dcat-ap-metadata.jsonld").is_file(), folder)
 
     def test_unknown_example_fails(self):
         with self.assertRaisesRegex(KeyError, "Unknown example"):
@@ -188,7 +219,7 @@ class CatalogAndRetrievalTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
-            spec = get_example("chemical-process-safety")
+            spec = CHEMICAL_SPEC
             result = DcatApHubRetriever(
                 dataset_factory=factory,
                 verbose=False,
@@ -344,7 +375,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 config=config,
             )
 
-            result = pipeline.run("tcm-predictive-maintenance")
+            result = pipeline.run_spec(TCM_SPEC)
 
             self.assertEqual("fake", result.agent.harness)
             self.assertEqual(1, len(retriever.calls))
@@ -501,8 +532,8 @@ class PipelineArchitectureTests(unittest.TestCase):
                 ),
             )
 
-            first = pipeline.run("chemical-process-safety")
-            second = pipeline.run("chemical-process-safety")
+            first = pipeline.run_spec(CHEMICAL_SPEC)
+            second = pipeline.run_spec(CHEMICAL_SPEC)
 
             self.assertNotEqual(first.agent.output_dir, second.agent.output_dir)
             self.assertTrue(first.provenance_path.is_file())
@@ -534,10 +565,10 @@ class PipelineArchitectureTests(unittest.TestCase):
 
             results = pipeline.run_examples()
 
-            self.assertEqual(13, len(results))
+            self.assertEqual(len(EXAMPLE_DATASETS), len(results))
             self.assertEqual(set(EXAMPLE_DATASETS), {result.dataset.spec.key for result in results})
-            self.assertEqual(13, len(harness.calls))
-            self.assertEqual(13, len(metadata_generator.calls))
+            self.assertEqual(len(EXAMPLE_DATASETS), len(harness.calls))
+            self.assertEqual(len(EXAMPLE_DATASETS), len(metadata_generator.calls))
 
     def test_pipeline_rejects_processor_without_process_entry_point(self):
         class NoProcessHarness(FakeHarness):
@@ -566,7 +597,7 @@ class PipelineArchitectureTests(unittest.TestCase):
             )
 
             with self.assertRaisesRegex(ValueError, "process\\(data_dir, output_dir\\)"):
-                pipeline.run("tcm-predictive-maintenance")
+                pipeline.run_spec(TCM_SPEC)
             self.assertEqual([], metadata_generator.calls)
 
     def test_pipeline_rejects_false_harness_completion_before_metadata(self):
@@ -608,7 +639,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 ValueError,
                 r"Agent run 'false-success'.*train\.csv.*test\.csv",
             ):
-                pipeline.run("tcm-predictive-maintenance")
+                pipeline.run_spec(TCM_SPEC)
             self.assertEqual([], metadata_generator.calls)
 
     def test_pipeline_rejects_invalid_metadata_before_agent_run(self):
@@ -638,7 +669,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 ValueError,
                 "missing Croissant source metadata",
             ):
-                pipeline.run("chemical-process-safety")
+                pipeline.run_spec(CHEMICAL_SPEC)
 
             self.assertEqual([], harness.calls)
 
@@ -679,7 +710,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir.mkdir()
             output_dir = root / "output"
             artifact_dir = output_dir
-            spec = get_example("industry-5-cyber-physical-systems")
+            spec = INDUSTRY5_SPEC
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=output_dir,
@@ -749,7 +780,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir = root / "data"
             data_dir.mkdir()
             artifact_dir = root / "output"
-            spec = get_example("tcm-predictive-maintenance")
+            spec = TCM_SPEC
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=artifact_dir,
@@ -806,7 +837,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir = root / "data"
             data_dir.mkdir()
             output_dir = root / "output"
-            spec = get_example("tcm-predictive-maintenance")
+            spec = TCM_SPEC
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=output_dir,
@@ -882,7 +913,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir = root / "data"
             data_dir.mkdir()
             artifact_dir = root / "output"
-            spec = get_example("tcm-predictive-maintenance")
+            spec = TCM_SPEC
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=artifact_dir,
@@ -944,7 +975,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir = data_root / "downloaded-package"
             data_dir.mkdir(parents=True)
             artifact_dir = root / "output" / "chemical-process-safety"
-            spec = get_example("chemical-process-safety")
+            spec = CHEMICAL_SPEC
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=artifact_dir,
@@ -999,7 +1030,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir = root / "data" / "chemical-process-safety"
             data_dir.mkdir(parents=True)
             output_dir = root / "output" / "chemical-process-safety"
-            spec = get_example("chemical-process-safety")
+            spec = CHEMICAL_SPEC
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=output_dir,

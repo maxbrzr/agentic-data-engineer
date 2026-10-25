@@ -5,7 +5,34 @@ from urllib.parse import urlparse
 
 from ..contracts import DatasetSpec
 
+# Examples backed by folders already downloaded under data/. The URL is the
+# dataset's record on data.hammerhai.eu; Zenodo records are not published there
+# yet, so those use the DOI. Local examples never fetch their URL.
 _EXAMPLE_DATASETS = {
+    "comprehensive-multi-sheet-safety-simulation": DatasetSpec(
+        key="comprehensive-multi-sheet-safety-simulation",
+        title=(
+            "Comprehensive Multi-Sheet Simulation and Diagnostic Dataset for "
+            "AI-Driven Safety Analysis in Complex Engineering Systems"
+        ),
+        url="https://doi.org/10.5281/zenodo.18204207",
+        local_dir_name=(
+            "Comprehensive Multi-Sheet Simulation and Diagnostic Dataset for "
+            "AI-Driven Safety Analysis in Complex Engineering Systems"
+        ),
+    ),
+    "part-separator-computation-time": DatasetSpec(
+        key="part-separator-computation-time",
+        title=(
+            "Computation time measurements of the part separator submodel in a "
+            "real-time co-simulation"
+        ),
+        url="https://data.hammerhai.eu/en/dataset/doi-10-18419-darus-6472",
+        local_dir_name=(
+            "Computation time measurements of the part separator submodel in a "
+            "real-time co-simulation"
+        ),
+    ),
     "edge-ai-industrial-robot-motion": DatasetSpec(
         key="edge-ai-industrial-robot-motion",
         title="Edge-AI Industrial Robot Motion Dataset",
@@ -18,6 +45,15 @@ _EXAMPLE_DATASETS = {
         url="https://data.hammerhai.eu/en/dataset/9627351",
         local_dir_name="Industrial Digital Twin Dataset 1 Year",
     ),
+    "industrial-equipment-sensor-anomaly": DatasetSpec(
+        key="industrial-equipment-sensor-anomaly",
+        title="Industrial Equipment Sensor Anomaly Data",
+        url=(
+            "https://data.hammerhai.eu/en/dataset/"
+            "petsteb-industrial-sensor-anomaly-data"
+        ),
+        local_dir_name="Industrial Equipment Sensor Anomaly Data",
+    ),
     "industrial-machine-predictive-maintenance": DatasetSpec(
         key="industrial-machine-predictive-maintenance",
         title="Industrial Machine Predictive Maintenance (syn)",
@@ -27,11 +63,17 @@ _EXAMPLE_DATASETS = {
         ),
         local_dir_name="Industrial Machine Predictive Maintenance (syn)",
     ),
-    "industrial-robotics-and-automation": DatasetSpec(
-        key="industrial-robotics-and-automation",
-        title="Industrial Robotics and Automation Dataset",
-        url="https://data.hammerhai.eu/en/dataset/5973385",
-        local_dir_name="Industrial Robotics and Automation Dataset",
+    "industrial-screw-driving": DatasetSpec(
+        key="industrial-screw-driving",
+        title=(
+            "Industrial screw driving dataset collection: Time series data for "
+            "process monitoring and anomaly detection"
+        ),
+        url="https://doi.org/10.5281/zenodo.16031381",
+        local_dir_name=(
+            "Industrial screw driving dataset collection Time series data for "
+            "process monitoring and anomaly detection"
+        ),
     ),
     "industrial-smart-factory-automation-2026": DatasetSpec(
         key="industrial-smart-factory-automation-2026",
@@ -42,59 +84,55 @@ _EXAMPLE_DATASETS = {
         ),
         local_dir_name="Industrial Smart Factory Automation Dataset 2026",
     ),
+    "imaks-knowledge-extraction": DatasetSpec(
+        key="imaks-knowledge-extraction",
+        title="iMAKS (industrial ModulAr Knowledge extraction Synthetic dataset)",
+        url="https://doi.org/10.5281/zenodo.20075430",
+        local_dir_name=(
+            "iMAKS (industrial ModulAr Knowledge extraction Synthetic dataset)"
+        ),
+    ),
     "machine-failure": DatasetSpec(
         key="machine-failure",
         title="Machine Failure Dataset",
-        url=(
-            "https://data.hammerhai.eu/en/dataset/"
-            "sumit913-machine-failure-dataset"
-        ),
+        url="https://data.hammerhai.eu/en/dataset/sumit913-machine-failure-dataset",
         local_dir_name="Machine Failure Dataset",
     ),
-    "machine-predictive-maintenance-classification": DatasetSpec(
-        key="machine-predictive-maintenance-classification",
-        title="Machine Predictive Maintenance Classification",
-        url="https://data.hammerhai.eu/en/dataset/1697740",
-        local_dir_name="Machine Predictive Maintenance Classification",
+    "predictive-maintenance-10k-synthetic-sensors": DatasetSpec(
+        key="predictive-maintenance-10k-synthetic-sensors",
+        title="Predictive Maintenance: 10k Synthetic Sensors",
+        url=(
+            "https://data.hammerhai.eu/en/dataset/"
+            "fernandopipaalves-predictive-maintenance-10k-synthetic-sensors"
+        ),
+        local_dir_name="Predictive Maintenance 10k Synthetic Sensors",
     ),
     "predictive-maintenance-engine-data": DatasetSpec(
         key="predictive-maintenance-engine-data",
         title="Predictive Maintenance Engine Data",
         url=(
             "https://data.hammerhai.eu/en/dataset/"
-            "mukherjee78-predictive-maintenance-engine-data"
+            "rynaxzion-predictive-maintenance-engine-data"
         ),
         local_dir_name="Predictive Maintenance Engine Data",
     ),
-    "smart-manufacturing-maintenance": DatasetSpec(
-        key="smart-manufacturing-maintenance",
-        title="Smart Manufacturing Maintenance Dataset",
-        url="https://data.hammerhai.eu/en/dataset/7631074",
-        local_dir_name="Smart Manufacturing Maintenance Dataset",
-    ),
-    "tcm-predictive-maintenance": DatasetSpec(
-        key="tcm-predictive-maintenance",
-        title="TCM: Benchmark Datasets for Predictive Maintenance in Steel Manufacturing",
-        url="http://data.sdil.de/en/dataset/10-5281-zenodo-11469702",
-    ),
-    "chemical-process-safety": DatasetSpec(
-        key="chemical-process-safety",
-        title="AI-Ready Simulation Dataset for Chemical Process Safety and Accident Prevention",
-        url="http://data.sdil.de/en/dataset/10-5281-zenodo-18200704",
-    ),
-    "industry-5-cyber-physical-systems": DatasetSpec(
-        key="industry-5-cyber-physical-systems",
+    "rt-fdd-pick-and-place-electric-furnace": DatasetSpec(
+        key="rt-fdd-pick-and-place-electric-furnace",
         title=(
-            "Smart Cyber-Physical Systems Dataset for Real-Time Optimization, "
-            "Resilience, and Sustainability in Industry 5.0"
+            "RT-FDD Datasets: Pick-and-Place and Electric Furnace Benchmarks "
+            "for Real-Time Fault Detection and Diagnosis"
         ),
-        url="http://data.sdil.de/en/dataset/10-5281-zenodo-18177239",
+        url="https://doi.org/10.5281/zenodo.20576461",
+        local_dir_name=(
+            "RT-FDD Datasets Pick-and-Place and Electric Furnace Benchmarks "
+            "for Real-Time Fault Detection and Diagnosis"
+        ),
     ),
-    "water-pump-rul-predictive-maintenance": DatasetSpec(
-        key="water-pump-rul-predictive-maintenance",
-        title="Water Pump RUL - Predictive Maintenance",
-        url="https://data.hammerhai.eu/en/dataset/1832463",
-        local_dir_name="Water Pump RUL - Predictive Maintenance",
+    "time-series-data": DatasetSpec(
+        key="time-series-data",
+        title="Time Series Data",
+        url="https://data.hammerhai.eu/en/dataset/deeeja-time-series-data",
+        local_dir_name="Time Series Data",
     ),
 }
 

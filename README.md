@@ -33,14 +33,18 @@ List or run an example:
 ```bash
 uv run agentic-data-engineer --list-examples
 uv run agentic-data-engineer --list-models
-uv run agentic-data-engineer --example tcm-predictive-maintenance
+uv run agentic-data-engineer --example machine-failure
 uv run agentic-data-engineer --harness pi \
   --example predictive-maintenance-engine-data \
   --provider kit
 ```
 
-Examples backed by an existing directory under `data/` reuse those local
-files and do not download another copy.
+Every example is a dataset already downloaded under `data/<folder>/` (14 from
+Kaggle, Hugging Face, Zenodo, and DaRUS, listed by `--list-examples`); runs reuse
+those files and download nothing. `data/` is not versioned, so on a new machine
+place the folders there first, e.g. by downloading the records with
+dcat-ap-hub. The example URL is the dataset's record on data.hammerhai.eu, or
+its DOI for Zenodo datasets, which are not published there yet.
 
 Run an arbitrary DCAT-AP dataset URL:
 
@@ -78,7 +82,7 @@ Select GWDG and a model when running the pipeline:
 
 ```bash
 uv run agentic-data-engineer \
-  --example tcm-predictive-maintenance \
+  --example machine-failure \
   --provider gwdg \
   --model glm-5.3-flash
 ```
@@ -114,13 +118,13 @@ Run one of them with either harness:
 
 ```bash
 uv run agentic-data-engineer \
-  --example tcm-predictive-maintenance \
+  --example machine-failure \
   --provider kit \
   --model kit.glm-5.3-flash
 
 uv run agentic-data-engineer \
   --harness pi \
-  --example tcm-predictive-maintenance \
+  --example machine-failure \
   --provider kit \
   --model kit.glm-5.3-flash
 ```
@@ -161,7 +165,7 @@ inside its Docker image, so it needs no host installation or daemon:
 ```bash
 uv run agentic-data-engineer \
   --harness pi \
-  --example tcm-predictive-maintenance \
+  --example machine-failure \
   --provider gwdg \
   --model glm-5.3-flash
 ```
