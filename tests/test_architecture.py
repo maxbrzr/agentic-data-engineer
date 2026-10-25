@@ -57,8 +57,11 @@ class FakeHarness:
 
     def run(self, request, model):
         self.calls.append((request, model))
+        self.saw_data_copy = (request.output_dir / "data").exists()
         artifact = request.output_dir / "parser.py"
-        artifact.write_text("# generated\n", encoding="utf-8")
+        artifact.write_text(
+            "def process(input_files, output_dir):\n    pass\n", encoding="utf-8"
+        )
         train = request.output_dir / "train.csv"
         test = request.output_dir / "test.csv"
         train.write_text("feature,target\n1,0\n", encoding="utf-8")
@@ -385,6 +388,33 @@ class PipelineArchitectureTests(unittest.TestCase):
                 "model-a",
                 croissant_provenance["derived_from_agent_run"]["model"],
             )
+            self.assertFalse(harness.saw_data_copy)
+            copied = request.output_dir / "data" / "raw.csv"
+            self.assertEqual("feature,target\n1,0\n", copied.read_text(encoding="utf-8"))
+            source_data = provenance["source_data"]
+            self.assertEqual(str(request.dataset.data_dir), source_data["copied_from"])
+            self.assertEqual(
+                {"raw.csv": hashlib.sha256(copied.read_bytes()).hexdigest()},
+                source_data["files"],
+            )
+            package = source_data["dataset_package"]
+            self.assertEqual("data/parser.py", package["processor"]["path"])
+            self.assertEqual(
+                (request.output_dir / "parser.py").read_bytes(),
+                (request.output_dir / "data" / "parser.py").read_bytes(),
+            )
+            draft = json.loads(
+                (request.output_dir / "data" / "dcat-metadata.jsonld").read_text(
+                    encoding="utf-8"
+                )
+            )
+            dataset_node, processor_node = draft["@graph"]
+            self.assertEqual("dcat:Dataset", dataset_node["@type"])
+            self.assertEqual(
+                [{"@id": processor_node["@id"]}], dataset_node["dct:relation"]
+            )
+            self.assertEqual("rdfs:Resource", processor_node["@type"])
+            self.assertEqual("parser.py", processor_node["dcat:downloadURL"])
 
     def test_pipeline_runs_url_derived_spec(self):
         retriever = FakeRetriever()
@@ -464,6 +494,35 @@ class PipelineArchitectureTests(unittest.TestCase):
             self.assertEqual(set(EXAMPLE_DATASETS), {result.dataset.spec.key for result in results})
             self.assertEqual(13, len(harness.calls))
             self.assertEqual(13, len(metadata_generator.calls))
+
+    def test_pipeline_rejects_parser_without_process_entry_point(self):
+        class NoProcessHarness(FakeHarness):
+            def run(self, request, model):
+                result = super().run(request, model)
+                (request.output_dir / "parser.py").write_text(
+                    "def parse(data_dir, target_col):\n    pass\n", encoding="utf-8"
+                )
+                return result
+
+        metadata_generator = FakeMetadataGenerator()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            prompt = root / "agent.md"
+            prompt.write_text("System prompt", encoding="utf-8")
+            pipeline = DataEngineeringPipeline(
+                retriever=FakeRetriever(),
+                harness=NoProcessHarness(),
+                metadata_generator=metadata_generator,
+                config=PipelineConfig(
+                    workspace_root=root,
+                    prompt_path=prompt,
+                    model=ModelConfig("provider", "model"),
+                ),
+            )
+
+            with self.assertRaisesRegex(ValueError, "process\\(input_files, output_dir\\)"):
+                pipeline.run("tcm-predictive-maintenance")
+            self.assertEqual([], metadata_generator.calls)
 
     def test_pipeline_rejects_false_harness_completion_before_metadata(self):
         class MissingOutputHarness:

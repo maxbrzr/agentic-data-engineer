@@ -214,9 +214,34 @@ output/<example>/runs/<timestamp>__<provider>__<model>__<run-id>/
 ├── test.csv
 ├── croissant.json
 ├── provenance.json
+├── data/                  # dcat-ap-hub dataset folder, added after the agent run
+│   ├── <original files>
+│   ├── parser.py          # copy of the generated processor
+│   └── dcat-metadata.jsonld  # draft: original metadata + processor entry
 ├── agent.log              # live agent log, written during the run
 └── agent_transcript.md    # full session transcript, written at the end
 ```
 
 `provenance.json` records the harness, provider, model, run IDs, and artifact
-hashes. Files from failed runs remain available for diagnosis.
+hashes, plus a hash for every file in `data/`. The raw data is copied only after
+the agent finishes, so the agent never gets a writable copy. Files from failed
+runs remain available for diagnosis.
+
+`parser.py` defines a module-level `process(input_files, output_dir)` function,
+so each run's `data/` folder can be processed with
+[dcat-ap-hub](https://github.com/maxbrzr/dcat-ap-hub) without installing it in the
+sandbox:
+
+```python
+from dcat_ap_hub import Dataset
+
+ds = Dataset.from_directory("output/<example>/runs/<run>/data")
+ds.process()  # writes data/processed/train.csv and test.csv
+```
+
+This needs a dcat-ap-hub version that accepts plain `process()` functions. It
+runs generated code on your machine, so only process runs you trust. When the
+dataset is published, its metadata replaces the draft `dcat-metadata.jsonld`; it
+must contain the same processor entry (`rdfs:Resource` with
+`dct:conformsTo: http://example.org/profiles/Processor`, linked via
+`dct:relation`).

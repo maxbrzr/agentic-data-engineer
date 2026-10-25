@@ -110,6 +110,9 @@ def parse(
 Implementation requirements:
 
 - Use Pandas readers such as `pd.read_csv()`, `pd.read_excel()`, `pd.read_parquet()`, or `pd.read_json()` where appropriate.
+- Pass `float_precision="round_trip"` to every `pd.read_csv()` call. The default
+  parser's result depends on the platform (Linux and macOS differ in the last
+  digit), which would make `process()` outputs differ between machines.
 - Do not manually parse complete tabular files line by line.
 - Skip irrelevant files with visible, specific diagnostics.
 - Do not use broad exception handling that silently hides data loss.
@@ -196,6 +199,30 @@ Additional requirements:
 - Final feature and target columns must be numeric and contain no null, NaN, or infinite values.
 - Export `output_dir/train.csv` and `output_dir/test.csv`.
 
+### dcat-ap-hub entry point
+
+`parser.py` must also define this module-level function, which the published
+dataset uses as its processor (dcat-ap-hub calls it via `Dataset.process()`):
+
+```python
+from pathlib import Path
+
+def process(input_files: list[Path], output_dir: Path) -> None:
+    """Parse, split, and write train.csv and test.csv to output_dir."""
+    ...
+```
+
+- Derive the dataset folder as the common parent directory of `input_files`, call
+  `parse()` on it, then apply the same split and export logic used for
+  `output_dir/train.csv` and `output_dir/test.csv`. The files it writes must be
+  identical to those exports.
+- `input_files` are only the top-level files of the dataset folder. The folder may
+  also contain `parser.py`, `dcat-metadata.jsonld`, and a `processed/` output
+  folder from earlier runs. Select source files by the specific names or patterns
+  identified during analysis; never read those extra files.
+- Do not import `dcat_ap_hub` or any package beyond those the parser already uses.
+- Hard-coded absolute paths are not allowed anywhere in `parser.py`.
+
 ## 4. Run gatekeeper validation
 
 Use the aggregate tabular validator from the installed package:
@@ -241,6 +268,11 @@ test_deterministic_splits(
 )
 ```
 
+Then verify the dcat-ap-hub entry point: call `process()` with the top-level files
+of the read-only dataset folder and a fresh temporary output directory, and assert
+that the `train.csv` and `test.csv` it writes are byte-identical to
+`output_dir/train.csv` and `output_dir/test.csv`.
+
 For a genuinely time-indexed task that requires a regular grid, also use `test_datetimeindex_consistency()` and `test_timestamps()` with the frequency inferred by the processor. Do not force ordinary tabular data into a `DatetimeIndex`.
 
 If validation fails, fix the processor and rerun validation. Do not weaken or bypass checks.
@@ -260,4 +292,4 @@ Report:
 - Paths to `parser.py`, `train.csv`, and `test.csv`.
 - Remaining assumptions or limitations.
 
-Do not claim success unless those three required files exist and every applicable tabular validation passes.
+Do not claim success unless those three required files exist, `process()` reproduces the exported splits, and every applicable tabular validation passes.

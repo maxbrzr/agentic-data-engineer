@@ -35,7 +35,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "croissant-baker", specifier = ">=0.3.2,<0.4.0" },
-    { name = "dcat-ap-hub", specifier = ">=0.1.4" },
+    { name = "dcat-ap-hub", editable = "../dcat-ap-hub" },
     { name = "mlcroissant", specifier = ">=1.1.0,<1.2.0" },
     { name = "numpy", specifier = ">=2.5.0" },
     { name = "opencode-ai", specifier = ">=0.1.0a36" },
@@ -575,7 +575,7 @@ wheels = [
 [[package]]
 name = "dcat-ap-hub"
 version = "0.1.4"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../dcat-ap-hub" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "chardet" },
@@ -588,9 +588,33 @@ dependencies = [
     { name = "tabpfn" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ed/8c/c0143951e25f1ecc155d93b1bb57b7c767465687f356e99edf3064fd90c4/dcat_ap_hub-0.1.4.tar.gz", hash = "sha256:f79d74985e6a05834c0e301c9334cd9b580d5885842c14b9eebbd2d57efff79a", size = 135778, upload-time = "2026-03-11T10:52:01.048Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c5/c2/31d797c5e5be7522f80cf0e94c625c62639ce9a1d7a7c43b77a5b5f28a4b/dcat_ap_hub-0.1.4-py3-none-any.whl", hash = "sha256:9a0992e2b2eaebcbb347b6f3c606b4ec15c05918f0d4ccbe3fb1437ce2ff7511", size = 22267, upload-time = "2026-03-11T10:51:59.534Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "accelerate", marker = "extra == 'huggingface'", specifier = ">=1.12.0" },
+    { name = "beautifulsoup4", specifier = ">=4.13.5" },
+    { name = "chardet", specifier = ">=5.2.0,<6.0.0" },
+    { name = "onnxruntime", marker = "extra == 'onnx'", specifier = ">=1.20.0" },
+    { name = "opencv-python", specifier = ">=4.12.0.88" },
+    { name = "openpyxl", specifier = ">=3.1.5" },
+    { name = "pandas", specifier = ">=2.3.1" },
+    { name = "pypdf", specifier = ">=6.1.0" },
+    { name = "rdflib", specifier = ">=7.1.4" },
+    { name = "requests", specifier = ">=2.32.4" },
+    { name = "tabpfn", specifier = ">=6.0.5" },
+    { name = "torch", marker = "extra == 'huggingface'", specifier = ">=2.9.0" },
+    { name = "tqdm", specifier = ">=4.67.1" },
+    { name = "transformers", marker = "extra == 'huggingface'", specifier = ">=4.57.1" },
+]
+provides-extras = ["onnx", "huggingface"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "ipykernel", specifier = ">=6.30.0" },
+    { name = "pandas-stubs", specifier = ">=2.3.0.250703" },
+    { name = "pytest", specifier = ">=9.0.2" },
+    { name = "types-requests", specifier = ">=2.32.4.20250611" },
+    { name = "types-tqdm", specifier = ">=4.67.0.20250516" },
 ]
 
 [[package]]

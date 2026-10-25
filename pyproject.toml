@@ -22,3 +22,7 @@ agentic-data-engineer = "agentic_data_engineer.cli:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv.sources]
+# Local checkout until the processor-contract changes are released.
+dcat-ap-hub = { path = "../dcat-ap-hub", editable = true }
