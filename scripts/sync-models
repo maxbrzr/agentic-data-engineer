@@ -1,0 +1,6 @@
+#!/bin/sh
+# Regenerate Docker harness model configs from src/agentic_data_engineer/providers/*.json.
+# Pass --check to verify, or --check-live to compare with the providers' live model lists.
+set -eu
+cd "$(dirname "$0")/.."
+exec uv run python -m agentic_data_engineer.agent.model_sync "$@"

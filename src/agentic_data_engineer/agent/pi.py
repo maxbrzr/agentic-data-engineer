@@ -12,7 +12,14 @@ from time import monotonic, sleep
 from typing import Any
 from uuid import uuid4
 
-from ..contracts import AgentRequest, AgentRunResult, ModelConfig
+from ..contracts import (
+    AGENT_LOG_NAME,
+    AGENT_TRANSCRIPT_NAME,
+    AgentRequest,
+    AgentRunResult,
+    ModelConfig,
+)
+from .pi_transcript import build_pi_transcript
 from .provider_env import require_provider_environment
 
 CommandRunner = Callable[..., Any]
@@ -94,7 +101,6 @@ class PiHarness:
 
         session_dir = request.output_dir / ".pi-sessions"
         event_chunks: list[str] = []
-        final_text = ""
         run_id: str | None = None
         message_id: str | None = None
         missing = self._missing_outputs(request.output_dir)
@@ -132,12 +138,11 @@ class PiHarness:
             finally:
                 request_path.unlink(missing_ok=True)
 
-            parsed_id, parsed_message_id, parsed_text = self._parse_events(
+            parsed_id, parsed_message_id, _ = self._parse_events(
                 completed.stdout or ""
             )
             run_id = parsed_id or run_id
             message_id = parsed_message_id or message_id
-            final_text = parsed_text or final_text
             missing = self._missing_outputs(request.output_dir)
             if not missing:
                 break
@@ -149,9 +154,8 @@ class PiHarness:
                 )
 
         run_id = run_id or f"pi-{uuid4().hex}"
-        run_log = request.output_dir / f"pi_run_{run_id}.log"
+        run_log = request.output_dir / AGENT_LOG_NAME
         run_log.write_text("".join(event_chunks), encoding="utf-8")
-        (request.output_dir / "pi_live.log").unlink(missing_ok=True)
         if missing:
             raise ValueError(
                 f"Pi run {run_id!r} exhausted "
@@ -160,13 +164,8 @@ class PiHarness:
                 f"See {run_log}."
             )
 
-        report = request.output_dir / f"pi_report_{run_id}.md"
-        report.write_text(
-            final_text.strip() + "\n"
-            if final_text.strip()
-            else "Pi completed without a final text report.\n",
-            encoding="utf-8",
-        )
+        report = request.output_dir / AGENT_TRANSCRIPT_NAME
+        report.write_text(build_pi_transcript(session_dir, run_id), encoding="utf-8")
         artifacts = tuple(
             sorted(
                 (path for path in request.output_dir.rglob("*") if path.is_file()),
@@ -201,12 +200,13 @@ class PiHarness:
                     str(launcher),
                     "run",
                     request.dataset.spec.key,
+                    request.dataset.data_dir.name,
                     str(request_path),
                 ]
                 if self._command_runner is None:
                     completed = self._run_streaming(
                         command,
-                        request.output_dir / "pi_live.log",
+                        request.output_dir / AGENT_LOG_NAME,
                     )
                 else:
                     completed = self._command_runner(
@@ -300,6 +300,7 @@ class PiHarness:
         closed: set[str] = set()
         started = monotonic()
         last_output = started
+        pi_process_started = False
         live_log = (
             live_log_path.open("a", encoding="utf-8", buffering=1)
             if live_log_path is not None
@@ -317,7 +318,10 @@ class PiHarness:
                         output="".join(captured["stdout"]),
                         stderr="".join(captured["stderr"]),
                     )
-                if now - last_output > self.settings.stall_timeout_seconds:
+                if (
+                    pi_process_started
+                    and now - last_output > self.settings.stall_timeout_seconds
+                ):
                     raise subprocess.TimeoutExpired(
                         command,
                         self.settings.stall_timeout_seconds,
@@ -337,6 +341,14 @@ class PiHarness:
                     closed.add(stream_name)
                     continue
                 last_output = monotonic()
+                if stream_name == "stdout":
+                    try:
+                        event = json.loads(line)
+                    except json.JSONDecodeError:
+                        pass
+                    else:
+                        if event.get("type") == "harness_status":
+                            pi_process_started = True
                 self._show_progress(stream_name, line)
                 retained_line = self._retained_log_line(stream_name, line)
                 if retained_line is not None:
@@ -465,7 +477,7 @@ class PiHarness:
 
     @staticmethod
     def _append_live_note(output_dir: Path, note: str) -> None:
-        with (output_dir / "pi_live.log").open("a", encoding="utf-8") as stream:
+        with (output_dir / AGENT_LOG_NAME).open("a", encoding="utf-8") as stream:
             stream.write(f"\n[harness] {note}\n")
 
     def _require_provider_environment(self, provider_id: str) -> None:

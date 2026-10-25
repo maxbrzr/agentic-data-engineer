@@ -1,0 +1,47 @@
+{
+  "name": "OpenCode Zen",
+  "docs": "https://opencode.ai/docs/zen/",
+  "builtin": true,
+  "harnesses": [
+    "opencode"
+  ],
+  "default_model": "deepseek-v4.1-flash-free",
+  "models": [
+    {
+      "id": "beam-free",
+      "name": "beam-free"
+    },
+    {
+      "id": "big-pickle",
+      "name": "big-pickle"
+    },
+    {
+      "id": "deepseek-v4.1-flash-free",
+      "name": "deepseek-v4.1-flash-free"
+    },
+    {
+      "id": "flint-40b-free",
+      "name": "flint-40b-free"
+    },
+    {
+      "id": "glm-5.3-flash-free",
+      "name": "glm-5.3-flash-free"
+    },
+    {
+      "id": "mimo-v2.6-flash-free",
+      "name": "mimo-v2.6-flash-free"
+    },
+    {
+      "id": "nemotron-3-ultra-free",
+      "name": "nemotron-3-ultra-free"
+    },
+    {
+      "id": "nemotron-3.5-lightning-free",
+      "name": "nemotron-3.5-lightning-free"
+    },
+    {
+      "id": "nemotron-3.5-super-vl-free",
+      "name": "nemotron-3.5-super-vl-free"
+    }
+  ]
+}

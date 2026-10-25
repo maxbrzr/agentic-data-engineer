@@ -28,7 +28,6 @@ _REQUIRED_SOURCE_FIELDS = (
     "description",
     "license",
     "citation",
-    "date_published",
     "creators",
 )
 

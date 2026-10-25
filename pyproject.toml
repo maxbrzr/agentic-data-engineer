@@ -12,12 +12,8 @@ dependencies = [
     "dcat-ap-hub>=0.1.4",
     "mlcroissant>=1.1.0,<1.2.0",
     "numpy>=2.5.0",
-    "pandas>=3.0.3",
-]
-
-[project.optional-dependencies]
-opencode = [
     "opencode-ai>=0.1.0a36",
+    "pandas>=3.0.3",
 ]
 
 [project.scripts]

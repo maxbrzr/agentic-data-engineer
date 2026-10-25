@@ -1,0 +1,61 @@
+{
+  "name": "GWDG SAIA",
+  "docs": "https://docs.hpc.gwdg.de/services/ai-services/saia/index.html",
+  "base_url": "https://chat-ai.academiccloud.de/v1",
+  "api_key_env": "SAIA_API_KEY",
+  "harnesses": [
+    "opencode",
+    "pi"
+  ],
+  "default_model": "qwen3-coder-next",
+  "ignore": [
+    "e5-mistral",
+    "multilingual-e5",
+    "qwen3-embedding",
+    "internvl",
+    "flux",
+    "whisper"
+  ],
+  "models": [
+    {
+      "id": "deepseek-v4-flash-0731",
+      "name": "DeepSeek V4 Flash 0731 (GWDG SAIA)"
+    },
+    {
+      "id": "gemma-4-31b-it",
+      "name": "Gemma 4 31B Instruct (GWDG SAIA)"
+    },
+    {
+      "id": "glm-5.3-flash",
+      "name": "GLM 5.3 Flash (GWDG SAIA)"
+    },
+    {
+      "id": "meta-llama-3.1-8b-instruct",
+      "name": "Llama 3.1 8B Instruct (GWDG SAIA)"
+    },
+    {
+      "id": "qwen3-30b-a3b-instruct-2507",
+      "name": "Qwen 3 30B A3B Instruct 2507 (GWDG SAIA)"
+    },
+    {
+      "id": "qwen3-coder-next",
+      "name": "Qwen 3 Coder Next (GWDG SAIA)"
+    },
+    {
+      "id": "qwen3-omni-30b-a3b-instruct",
+      "name": "Qwen 3 Omni 30B A3B Instruct (GWDG SAIA)"
+    },
+    {
+      "id": "qwen3.5-397b-a17b",
+      "name": "Qwen 3.5 397B A17B (GWDG SAIA)"
+    },
+    {
+      "id": "qwen3.6-35b-a3b",
+      "name": "Qwen 3.6 35B A3B (GWDG SAIA)"
+    },
+    {
+      "id": "qwen3.8-27b",
+      "name": "Qwen 3.8 27B (GWDG SAIA)"
+    }
+  ]
+}

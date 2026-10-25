@@ -1,8 +1,12 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "opencode/deepseek-v4-flash-free",
-  "small_model": "opencode/deepseek-v4-flash-free",
-  "enabled_providers": ["opencode", "gwdg", "kit"],
+  "model": "kit/kit.glm-5.3-flash",
+  "small_model": "kit/kit.glm-5.3-flash",
+  "enabled_providers": [
+    "gwdg",
+    "kit",
+    "opencode"
+  ],
   "provider": {
     "gwdg": {
       "npm": "@ai-sdk/openai-compatible",
@@ -12,29 +16,17 @@
         "apiKey": "{env:SAIA_API_KEY}"
       },
       "models": {
-        "apertus-70b-instruct-2509": {
-          "name": "Apertus 70B Instruct 2509 (GWDG SAIA)"
-        },
-        "deepseek-v4-flash": {
-          "name": "DeepSeek V4 Flash (GWDG SAIA)"
-        },
-        "devstral-2-123b-instruct-2512": {
-          "name": "Devstral 2 123B (GWDG SAIA)"
+        "deepseek-v4-flash-0731": {
+          "name": "DeepSeek V4 Flash 0731 (GWDG SAIA)"
         },
         "gemma-4-31b-it": {
           "name": "Gemma 4 31B Instruct (GWDG SAIA)"
         },
-        "glm-4.7": {
-          "name": "GLM 4.7 (GWDG SAIA)"
+        "glm-5.3-flash": {
+          "name": "GLM 5.3 Flash (GWDG SAIA)"
         },
         "meta-llama-3.1-8b-instruct": {
           "name": "Llama 3.1 8B Instruct (GWDG SAIA)"
-        },
-        "mistral-medium-3.5-128b": {
-          "name": "Mistral Medium 3.5 128B (GWDG SAIA)"
-        },
-        "openai-gpt-oss-120b": {
-          "name": "GPT OSS 120B (GWDG SAIA)"
         },
         "qwen3-30b-a3b-instruct-2507": {
           "name": "Qwen 3 30B A3B Instruct 2507 (GWDG SAIA)"
@@ -45,17 +37,14 @@
         "qwen3-omni-30b-a3b-instruct": {
           "name": "Qwen 3 Omni 30B A3B Instruct (GWDG SAIA)"
         },
-        "qwen3.5-122b-a10b": {
-          "name": "Qwen 3.5 122B A10B (GWDG SAIA)"
-        },
         "qwen3.5-397b-a17b": {
           "name": "Qwen 3.5 397B A17B (GWDG SAIA)"
         },
-        "qwen3.6-27b": {
-          "name": "Qwen 3.6 27B (GWDG SAIA)"
-        },
         "qwen3.6-35b-a3b": {
           "name": "Qwen 3.6 35B A3B (GWDG SAIA)"
+        },
+        "qwen3.8-27b": {
+          "name": "Qwen 3.8 27B (GWDG SAIA)"
         }
       }
     },
@@ -64,7 +53,7 @@
       "name": "KIT KI-Toolbox",
       "options": {
         "baseURL": "https://ki-toolbox.scc.kit.edu/api/v1",
-        "apiKey": "{env:KIT_AI_API_KEY}"
+        "apiKey": "{env:KIT_TOOLBOX_API_KEY}"
       },
       "models": {
         "kit.mistral-small-4-119b-a8b": {

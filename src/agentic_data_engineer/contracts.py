@@ -3,6 +3,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+# Fixed names for the agent session record in every run directory.
+AGENT_LOG_NAME = "agent.log"
+AGENT_TRANSCRIPT_NAME = "agent_transcript.md"
+
 
 @dataclass(frozen=True, slots=True)
 class DatasetSpec:
@@ -11,6 +15,7 @@ class DatasetSpec:
     key: str
     title: str
     url: str
+    local_dir_name: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

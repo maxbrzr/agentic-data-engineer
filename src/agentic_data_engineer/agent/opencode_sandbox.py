@@ -14,6 +14,8 @@ from .provider_env import (
 AttestationReader = Callable[[str, Path], dict[str, Any]]
 CommandRunner = Callable[..., Any]
 
+PROBE_PREFIX = ".opencode-sandbox-live-probe-"
+
 MANAGED_OPENCODE_URLS = {
     "http://127.0.0.1:54321",
     "http://localhost:54321",
@@ -34,7 +36,8 @@ def read_sandbox_attestation(
     probe_token = marker.get("probe_token")
     if (
         not isinstance(output_value, str)
-        or probe_name != ".opencode-sandbox-live-probe"
+        or not isinstance(probe_name, str)
+        or probe_name != PROBE_PREFIX + str(probe_token)
         or not isinstance(probe_token, str)
         or not probe_token
     ):
@@ -105,11 +108,17 @@ class OpencodeSandboxManager:
         self,
         example_key: str,
         *,
+        data_dir_name: str | None = None,
         required_provider: str | None = None,
     ) -> None:
         """Start or switch the sandbox unless its marker already matches."""
         self._require_provider_environment(required_provider)
-        if self._matches(example_key, required_provider=required_provider):
+        data_dir_name = data_dir_name or example_key
+        if self._matches(
+            example_key,
+            data_dir_name=data_dir_name,
+            required_provider=required_provider,
+        ):
             print(f"OpenCode sandbox already matches {example_key}.")
             return
 
@@ -123,7 +132,7 @@ class OpencodeSandboxManager:
         print(f"Starting OpenCode sandbox for {example_key}...")
         try:
             self.command_runner(
-                [str(launcher), "start", example_key],
+                [str(launcher), "start", example_key, data_dir_name],
                 cwd=self.project_root,
                 check=True,
             )
@@ -133,7 +142,11 @@ class OpencodeSandboxManager:
                 "Confirm that Docker Desktop is running and retry."
             ) from exc
 
-        if not self._matches(example_key, required_provider=required_provider):
+        if not self._matches(
+            example_key,
+            data_dir_name=data_dir_name,
+            required_provider=required_provider,
+        ):
             raise RuntimeError(
                 "The OpenCode sandbox started, but its output bind did not pass "
                 f"the host visibility check for {example_key!r}."
@@ -143,9 +156,12 @@ class OpencodeSandboxManager:
         self,
         example_key: str,
         *,
+        data_dir_name: str | None = None,
         required_provider: str | None = None,
     ) -> bool:
-        expected_data = (self.project_root / "data" / example_key).resolve()
+        expected_data = (
+            self.project_root / "data" / (data_dir_name or example_key)
+        ).resolve()
         expected_output = (self.project_root / "output" / example_key).resolve()
         try:
             marker = self.attestation_reader(

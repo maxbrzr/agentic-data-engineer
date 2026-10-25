@@ -7,7 +7,7 @@ from typing import Any
 
 from opencode_ai import Opencode
 
-from ..contracts import AgentRequest, AgentRunResult, ModelConfig
+from ..contracts import AGENT_LOG_NAME, AgentRequest, AgentRunResult, ModelConfig
 from .opencode_logging import save_session_messages, watch_session_events
 from .opencode_sandbox import (
     AttestationReader,
@@ -362,6 +362,6 @@ class OpencodeHarness:
 
     @staticmethod
     def _append_log_note(output_dir, session_id: str, note: str) -> None:
-        run_log = output_dir / f"opencode_run_{session_id}.log"
+        run_log = output_dir / AGENT_LOG_NAME
         with run_log.open("a", encoding="utf-8") as stream:
             stream.write(f"\n[harness] {note}\n")

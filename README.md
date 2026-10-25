@@ -8,8 +8,9 @@ then generates ML Croissant metadata and provenance.
 OpenCode is the default agent harness. Pi is available as an alternative. Both
 run in restricted Docker containers; no agent GUI is required.
 
-The current version supports three configured DCAT-AP examples. Catalogue
-discovery and publishing are not implemented yet:
+The current version supports configured local-backed DCAT-AP examples and
+direct DCAT-AP dataset URLs. Catalogue discovery and publishing are not
+implemented yet:
 
 - dataset discovery through the Piveau REST API;
 - uploading or registering results with Piveau;
@@ -21,21 +22,41 @@ discovery and publishing are not implemented yet:
 Requirements: Python 3.12+, [`uv`](https://docs.astral.sh/uv/), and Docker
 Desktop with Compose.
 
-Install with OpenCode support:
+Install (both harnesses are included):
 
 ```bash
-uv sync --extra opencode
+uv sync
 ```
 
 List or run an example:
 
 ```bash
-uv run --extra opencode agentic-data-engineer --list-examples
-uv run --extra opencode agentic-data-engineer --example tcm-predictive-maintenance
+uv run agentic-data-engineer --list-examples
+uv run agentic-data-engineer --list-models
+uv run agentic-data-engineer --example tcm-predictive-maintenance
+uv run agentic-data-engineer --harness pi \
+  --example predictive-maintenance-engine-data \
+  --provider kit
 ```
 
-OpenCode is selected automatically and uses
-`opencode/deepseek-v4-flash-free` by default. The CLI builds the container,
+Examples backed by an existing directory under `data/` reuse those local
+files and do not download another copy.
+
+Run an arbitrary DCAT-AP dataset URL:
+
+```bash
+uv run agentic-data-engineer \
+  --url 'https://catalog.example.org/dataset/example' \
+  --provider kit
+```
+
+The URL must be absolute and use HTTP or HTTPS. The pipeline derives a stable
+`url-<hash>` key for its `data/` and `output/` directories. The URL must resolve
+to a dataset supported by `dcat-ap-hub`, and its downloaded metadata must
+contain the fields required for Croissant generation.
+
+OpenCode is selected automatically. Both harnesses default to
+`kit/kit.glm-5.3-flash` (requires `KIT_TOOLBOX_API_KEY`). The CLI builds the container,
 mounts the selected dataset, and checks the sandbox automatically. Diagnostic
 commands are available through `./scripts/opencode`.
 
@@ -56,14 +77,14 @@ SAIA_API_KEY=your-current-api-key
 Select GWDG and a model when running the pipeline:
 
 ```bash
-uv run --extra opencode agentic-data-engineer \
+uv run agentic-data-engineer \
   --example tcm-predictive-maintenance \
   --provider gwdg \
-  --model glm-4.7
+  --model glm-5.3-flash
 ```
 
-Complete model lists are in `docker/opencode/opencode.json` and
-`docker/pi/models.json`.
+Run `uv run agentic-data-engineer --list-models` for the supported models, and
+see [Update provider models](#update-provider-models) to change them.
 
 You can also export `AGENT_MODEL_PROVIDER` and `AGENT_MODEL_ID` in your shell.
 The API key remains in the ignored `.env` file and is injected into the
@@ -77,7 +98,7 @@ API key under `Settings > Accounts > API Key`, then add it to the ignored
 `.env` file:
 
 ```dotenv
-KIT_AI_API_KEY=your-current-api-key
+KIT_TOOLBOX_API_KEY=your-current-api-key
 ```
 
 The `kit` provider intentionally exposes only the local KIT-hosted models that
@@ -92,7 +113,7 @@ for the authoritative current list:
 Run one of them with either harness:
 
 ```bash
-uv run --extra opencode agentic-data-engineer \
+uv run agentic-data-engineer \
   --example tcm-predictive-maintenance \
   --provider kit \
   --model kit.glm-5.3-flash
@@ -111,19 +132,38 @@ KIT changes the available models over time. Check the SCC model table if a
 configured model ID stops working; the older ZML model overview is no longer
 maintained.
 
-## Optional Pi harness
+## Update provider models
 
-Pi is installed inside its Docker image, so it needs no host installation or
-daemon:
+Each provider is defined in one file under
+[`src/agentic_data_engineer/providers/`](src/agentic_data_engineer/providers/):
+`gwdg.json`, `kit.json`, and `opencode.json`. Each file holds the endpoint, the
+API-key variable, the supported harnesses, the default model, the model list,
+and `ignore`: model-ID prefixes deliberately left out, such as external or
+non-chat models. The CLI choices, `--list-models`, and both Docker harness
+configs are derived from these files.
+
+When a provider changes its models:
 
 ```bash
-uv sync
+scripts/sync-models --check-live   # compare with each provider's /models endpoint
+# edit src/agentic_data_engineer/providers/<provider>.json
+scripts/sync-models                # regenerate docker/opencode/opencode.json and docker/pi/models.json
+```
 
+Do not edit the two Docker configs' model sections by hand; the test suite
+fails when they drift from the provider files.
+
+## Pi harness
+
+OpenCode is the default; pass `--harness pi` to use Pi instead. Pi is installed
+inside its Docker image, so it needs no host installation or daemon:
+
+```bash
 uv run agentic-data-engineer \
   --harness pi \
   --example tcm-predictive-maintenance \
   --provider gwdg \
-  --model glm-4.7 \
+  --model glm-5.3-flash
 ```
 
 Pi starts a disposable container for each turn and stores its session in the
@@ -174,8 +214,8 @@ output/<example>/runs/<timestamp>__<provider>__<model>__<run-id>/
 ├── test.csv
 ├── croissant.json
 ├── provenance.json
-├── <harness>_run_<session-id>.log
-└── <harness>_report_<session-id>.md
+├── agent.log              # live agent log, written during the run
+└── agent_transcript.md    # full session transcript, written at the end
 ```
 
 `provenance.json` records the harness, provider, model, run IDs, and artifact

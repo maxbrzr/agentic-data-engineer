@@ -3,16 +3,32 @@ import os
 from collections.abc import Sequence
 from pathlib import Path
 
+from .agent.models import (
+    DEFAULT_HARNESS,
+    DEFAULT_MODEL_BY_PROVIDER,
+    DEFAULT_PROVIDER,
+    HARNESSES,
+    MODELS,
+    MODELS_BY_PROVIDER,
+    PROVIDERS,
+    PROVIDERS_BY_HARNESS,
+    resolve_model_config,
+)
 from .config import PipelineConfig
-from .contracts import ModelConfig
 from .metadata import CroissantBakerMetadataGenerator
 from .pipeline import DataEngineeringPipeline
-from .retrieval import EXAMPLE_DATASETS, DcatApHubRetriever, list_examples
+from .retrieval import (
+    EXAMPLE_DATASETS,
+    DcatApHubRetriever,
+    dataset_spec_from_url,
+    get_example,
+    list_examples,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Prepare one of the enabled DCAT-AP tabular datasets for ML."
+        description="Prepare a DCAT-AP tabular dataset for ML."
     )
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument(
@@ -24,7 +40,11 @@ def build_parser() -> argparse.ArgumentParser:
     selection.add_argument(
         "--all",
         action="store_true",
-        help="Process all three enabled examples sequentially.",
+        help="Process all enabled examples sequentially.",
+    )
+    selection.add_argument(
+        "--url",
+        help="Process one dataset from an absolute DCAT-AP HTTP(S) URL.",
     )
     parser.add_argument(
         "--list-examples",
@@ -32,20 +52,36 @@ def build_parser() -> argparse.ArgumentParser:
         help="List enabled examples without downloading or running an agent.",
     )
     parser.add_argument(
+        "--list-models",
+        action="store_true",
+        help="List supported providers and models per harness, then exit.",
+    )
+    parser.add_argument(
         "--harness",
-        choices=("opencode", "pi"),
-        default="opencode",
-        help="Agent harness to run in Docker (opencode or pi).",
+        choices=HARNESSES,
+        default=DEFAULT_HARNESS,
+        help=f"Agent harness to run in Docker. Default: {DEFAULT_HARNESS}.",
     )
     parser.add_argument(
         "--provider",
+        choices=PROVIDERS,
         default=os.getenv("AGENT_MODEL_PROVIDER"),
-        help="Model provider ID passed unchanged to the selected harness.",
+        help=(
+            "Model provider (pi supports gwdg and kit only). Defaults to "
+            f"$AGENT_MODEL_PROVIDER, else {DEFAULT_PROVIDER}."
+        ),
     )
     parser.add_argument(
         "--model",
+        choices=MODELS,
+        metavar="MODEL",
         default=os.getenv("AGENT_MODEL_ID"),
-        help="Model ID passed unchanged to the selected harness.",
+        help=(
+            "Model ID; must belong to the provider (see --list-models). "
+            "Defaults to $AGENT_MODEL_ID, else "
+            + ", ".join(f"{m} ({p})" for p, m in DEFAULT_MODEL_BY_PROVIDER.items())
+            + "."
+        ),
     )
     parser.add_argument(
         "--workspace-root",
@@ -184,23 +220,42 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"{spec.key}: {spec.title}\n  {spec.url}")
         return 0
 
-    if not args.all and not args.example:
-        parser.error("choose --example, --all, or --list-examples")
+    if args.list_models:
+        for harness, providers in PROVIDERS_BY_HARNESS.items():
+            print(f"{harness}:")
+            for provider in providers:
+                print(f"  {provider}:")
+                for model in MODELS_BY_PROVIDER[provider]:
+                    default = (
+                        " (default)"
+                        if DEFAULT_MODEL_BY_PROVIDER[provider] == model
+                        else ""
+                    )
+                    print(f"    {model}{default}")
+        return 0
+
+    if not args.all and not args.example and not args.url:
+        parser.error("choose --example, --all, --url, or --list-examples")
+
+    try:
+        specs = (
+            (dataset_spec_from_url(args.url),)
+            if args.url
+            else tuple(
+                get_example(key)
+                for key in (
+                    tuple(EXAMPLE_DATASETS) if args.all else tuple(args.example)
+                )
+            )
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
 
     workspace_root = args.workspace_root.expanduser().resolve()
-    provider_id = args.provider or (
-        "opencode" if args.harness == "opencode" else "gwdg"
-    )
-    if args.model:
-        model_id = args.model
-    elif provider_id == "kit":
-        model_id = "kit.glm-5.3-flash"
-    else:
-        model_id = (
-            "deepseek-v4-flash-free"
-            if args.harness == "opencode"
-            else "devstral-2-123b-instruct-2512"
-        )
+    try:
+        model = resolve_model_config(args.harness, args.provider, args.model)
+    except ValueError as exc:
+        parser.error(str(exc))
     sandbox_manager = None
     if args.harness == "opencode":
         from .agent.opencode_sandbox import OpencodeSandboxManager
@@ -219,7 +274,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     config = PipelineConfig(
         workspace_root=workspace_root,
         prompt_path=prompt_path,
-        model=ModelConfig(provider_id=provider_id, model_id=model_id),
+        model=model,
         force_download=args.force_download,
     )
     pipeline = DataEngineeringPipeline(
@@ -241,11 +296,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         config=config,
     )
 
-    keys = tuple(EXAMPLE_DATASETS) if args.all else tuple(args.example)
-    for key in keys:
+    for spec in specs:
         if sandbox_manager is not None:
-            sandbox_manager.ensure(key, required_provider=provider_id)
-        result = pipeline.run(key)
+            sandbox_manager.ensure(
+                spec.key,
+                data_dir_name=spec.local_dir_name,
+                required_provider=model.provider_id,
+            )
+        result = pipeline.run_spec(spec)
         print(
             f"{result.dataset.spec.key}: harness={result.agent.harness}, "
             f"run={result.agent.run_id}, output={result.agent.output_dir}, "

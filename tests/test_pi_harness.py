@@ -1,5 +1,5 @@
-import json
 import io
+import json
 import subprocess
 import sys
 import tempfile
@@ -57,6 +57,48 @@ class PiHarnessTests(unittest.TestCase):
                 self.assertFalse(request_document["continue_session"])
                 for name in ("parser.py", "train.csv", "test.csv"):
                     (request.output_dir / name).write_text("ok\n", encoding="utf-8")
+                session_dir = Path(request_document["session_dir"])
+                session_dir.mkdir(parents=True, exist_ok=True)
+                (session_dir / "session.jsonl").write_text(
+                    "\n".join(
+                        json.dumps(entry)
+                        for entry in (
+                            {"type": "session", "id": "pi-session"},
+                            {
+                                "type": "message",
+                                "message": {
+                                    "role": "user",
+                                    "content": [{"type": "text", "text": "Prepare"}],
+                                },
+                            },
+                            {
+                                "type": "message",
+                                "message": {
+                                    "role": "assistant",
+                                    "content": [
+                                        {"type": "text", "text": "Listing files."},
+                                        {
+                                            "type": "toolCall",
+                                            "id": "call-1",
+                                            "name": "bash",
+                                            "arguments": {"command": "ls data"},
+                                        },
+                                    ],
+                                },
+                            },
+                            {
+                                "type": "message",
+                                "message": {
+                                    "role": "toolResult",
+                                    "toolCallId": "call-1",
+                                    "content": [{"type": "text", "text": "a.csv"}],
+                                    "isError": False,
+                                },
+                            },
+                        )
+                    ),
+                    encoding="utf-8",
+                )
                 events = "\n".join(
                     (
                         json.dumps({"type": "session", "id": "pi-session"}),
@@ -66,9 +108,7 @@ class PiHarnessTests(unittest.TestCase):
                                 "message": {
                                     "id": "message-1",
                                     "role": "assistant",
-                                    "content": [
-                                        {"type": "text", "text": "Completed."}
-                                    ],
+                                    "content": [{"type": "text", "text": "Completed."}],
                                 },
                             }
                         ),
@@ -91,14 +131,20 @@ class PiHarnessTests(unittest.TestCase):
                     str(root / "scripts" / "pi"),
                     "run",
                     "chemical-process-safety",
+                    "chemical-process-safety",
                 ],
                 calls[0][0][:-1],
             )
             self.assertEqual(root, calls[0][1]["cwd"])
-            self.assertEqual(
-                "Completed.\n",
-                Path(result.metadata["report"]).read_text(encoding="utf-8"),
-            )
+            transcript_path = Path(result.metadata["report"])
+            self.assertEqual("agent_transcript.md", transcript_path.name)
+            transcript = transcript_path.read_text(encoding="utf-8")
+            self.assertIn("# Pi Session Transcript", transcript)
+            self.assertIn("### 1. user", transcript)
+            self.assertIn("Listing files.", transcript)
+            self.assertIn("- ✓ `bash`: ls data (completed)", transcript)
+            self.assertIn("a.csv", transcript)
+            self.assertEqual("agent.log", Path(result.metadata["run_log"]).name)
             self.assertTrue(Path(result.metadata["run_log"]).is_file())
             self.assertFalse(list(request.output_dir.glob(".pi-request-*.json")))
 
@@ -111,11 +157,7 @@ class PiHarnessTests(unittest.TestCase):
             def runner(command, **_kwargs):
                 document = json.loads(Path(command[-1]).read_text(encoding="utf-8"))
                 calls.append(document)
-                names = (
-                    ("parser.py",)
-                    if len(calls) == 1
-                    else ("train.csv", "test.csv")
-                )
+                names = ("parser.py",) if len(calls) == 1 else ("train.csv", "test.csv")
                 for name in names:
                     (request.output_dir / name).write_text("ok\n", encoding="utf-8")
                 return SimpleNamespace(
@@ -154,7 +196,7 @@ class PiHarnessTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "exhausted 1 continuation"):
                 harness.run(request, ModelConfig("provider-a", "model-a"))
 
-            self.assertTrue((request.output_dir / "pi_run_stuck.log").is_file())
+            self.assertTrue((request.output_dir / "agent.log").is_file())
 
     def test_gwdg_requires_key_in_ignored_dotenv(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -171,7 +213,7 @@ class PiHarnessTests(unittest.TestCase):
             request = self._request(root)
             harness = PiHarness(PiSettings(project_root=root))
 
-            with self.assertRaisesRegex(RuntimeError, "KIT_AI_API_KEY"):
+            with self.assertRaisesRegex(RuntimeError, "KIT_TOOLBOX_API_KEY"):
                 harness.run(
                     request,
                     ModelConfig("kit", "kit.glm-5.3-flash"),
@@ -291,7 +333,7 @@ class PiHarnessTests(unittest.TestCase):
             script = ";".join(
                 f"print({json.dumps(event)!r}, flush=True)" for event in events
             )
-            live_log = root / "pi_live.log"
+            live_log = root / "agent.log"
             terminal = io.StringIO()
 
             with redirect_stdout(terminal):
@@ -334,6 +376,36 @@ class PiHarnessTests(unittest.TestCase):
                 harness._run_streaming(
                     [sys.executable, "-c", "import time; time.sleep(5)"]
                 )
+
+    def test_startup_build_silence_does_not_trigger_model_stall_timeout(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            harness = PiHarness(
+                PiSettings(
+                    project_root=root,
+                    timeout_seconds=2,
+                    stall_timeout_seconds=0.1,
+                )
+            )
+            harness_status = json.dumps(
+                {
+                    "type": "harness_status",
+                    "provider": "kit",
+                    "model": "kit.glm-5.3-flash",
+                }
+            )
+            script = (
+                "import time; "
+                "print('building image', flush=True); "
+                "time.sleep(0.2); "
+                f"print({harness_status!r}, flush=True)"
+            )
+
+            completed = harness._run_streaming(
+                [sys.executable, "-c", script]
+            )
+
+            self.assertEqual(0, completed.returncode)
 
 
 if __name__ == "__main__":

@@ -14,7 +14,7 @@ services:
       PI_OFFLINE: "1"
       PI_TELEMETRY: "0"
       ADE_EXAMPLE_KEY: "${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
-      ADE_DATA_ROOT: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+      ADE_DATA_ROOT: "${ADE_ROOT}/data/${DATA_DIR_NAME:?Set DATA_DIR_NAME}"
       ADE_OUTPUT_DIR: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
       PI_REQUEST_FILE: "${PI_REQUEST_FILE:?Set PI_REQUEST_FILE}"
     env_file:
@@ -22,8 +22,8 @@ services:
         required: false
     volumes:
       - type: bind
-        source: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
-        target: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"
+        source: "${ADE_ROOT}/data/${DATA_DIR_NAME:?Set DATA_DIR_NAME}"
+        target: "${ADE_ROOT}/data/${DATA_DIR_NAME:?Set DATA_DIR_NAME}"
         read_only: true
       - type: bind
         source: "${ADE_ROOT}/output/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"

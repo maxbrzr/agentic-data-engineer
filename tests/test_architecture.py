@@ -8,11 +8,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
-try:
-    from agentic_data_engineer.agent.opencode import OpencodeHarness, OpencodeSettings
-except ImportError:
-    OpencodeHarness = None
-    OpencodeSettings = None
+from agentic_data_engineer.agent.opencode import OpencodeHarness, OpencodeSettings
 from agentic_data_engineer.config import PipelineConfig
 from agentic_data_engineer.contracts import (
     AgentRequest,
@@ -26,8 +22,10 @@ from agentic_data_engineer.pipeline import DataEngineeringPipeline
 from agentic_data_engineer.retrieval import (
     DcatApHubRetriever,
     EXAMPLE_DATASETS,
+    dataset_spec_from_url,
     get_example,
     list_examples,
+    validate_dataset_key,
 )
 
 
@@ -100,15 +98,42 @@ class FakeMetadataGenerator:
 
 
 class CatalogAndRetrievalTests(unittest.TestCase):
-    def test_catalog_contains_exactly_three_examples(self):
+    def test_catalog_contains_configured_examples(self):
         examples = list_examples()
-        self.assertEqual(3, len(examples))
+        self.assertEqual(13, len(examples))
         self.assertEqual(set(EXAMPLE_DATASETS), {example.key for example in examples})
         self.assertEqual(examples[0], get_example(examples[0].key))
+        self.assertEqual(
+            "Predictive Maintenance Engine Data",
+            get_example("predictive-maintenance-engine-data").local_dir_name,
+        )
 
     def test_unknown_example_fails(self):
         with self.assertRaisesRegex(KeyError, "Unknown example"):
             get_example("not-enabled")
+
+    def test_url_builds_stable_safe_dataset_spec(self):
+        url = "https://catalog.example.org/datasets/process-safety"
+
+        first = dataset_spec_from_url(url)
+        second = dataset_spec_from_url(f"  {url}  ")
+
+        self.assertEqual(first, second)
+        self.assertRegex(first.key, r"^url-[0-9a-f]{12}$")
+        self.assertEqual(url, first.url)
+        self.assertIn("catalog.example.org", first.title)
+
+    def test_url_rejects_non_http_sources(self):
+        for url in ("relative.jsonld", "file:///tmp/dataset.jsonld", ""):
+            with self.subTest(url=url):
+                with self.assertRaisesRegex(ValueError, "absolute HTTP"):
+                    dataset_spec_from_url(url)
+
+    def test_dataset_key_rejects_path_traversal(self):
+        for key in ("../escape", ".hidden", "nested/path", "with space"):
+            with self.subTest(key=key):
+                with self.assertRaisesRegex(ValueError, "Dataset keys"):
+                    validate_dataset_key(key)
 
     def test_dcat_adapter_downloads_to_stable_example_directory(self):
         calls = []
@@ -152,16 +177,102 @@ class CatalogAndRetrievalTests(unittest.TestCase):
             self.assertEqual((root / spec.key / "table.csv",), result.files)
             self.assertEqual([(root / spec.key, True, False)], calls)
 
-    def test_dcat_adapter_rejects_non_catalog_dataset(self):
-        unsupported = DatasetSpec(
-            key="unsupported",
-            title="Unsupported",
+    def test_dcat_adapter_accepts_url_derived_dataset(self):
+        remote = DatasetSpec(
+            key="url-123456789abc",
+            title="Remote",
             url="https://example.invalid/dataset",
         )
-        retriever = DcatApHubRetriever(dataset_factory=lambda _url: None)
+
+        class EmptyCollection:
+            def __init__(self, root):
+                self.root = root
+
+            def __iter__(self):
+                return iter(())
+
+        class RemoteDataset:
+            title = "Remote metadata title"
+
+            def download(self, *, data_dir, force, verbose):
+                data_dir.mkdir(parents=True, exist_ok=True)
+                return EmptyCollection(data_dir)
+
+        retriever = DcatApHubRetriever(dataset_factory=lambda _url: RemoteDataset())
         with tempfile.TemporaryDirectory() as temp_dir:
-            with self.assertRaisesRegex(ValueError, "three enabled examples"):
-                retriever.retrieve(unsupported, Path(temp_dir))
+            result = retriever.retrieve(remote, Path(temp_dir))
+
+        self.assertEqual(remote, result.spec)
+        self.assertEqual("Remote metadata title", result.metadata_title)
+
+    def test_dcat_adapter_rejects_html_instead_of_dataset_asset(self):
+        class HtmlCollection:
+            def __init__(self, root, asset):
+                self.root = root
+                self.asset = asset
+
+            def __iter__(self):
+                return iter((self.asset,))
+
+        class LoginPageDataset:
+            title = "Protected dataset"
+
+            def download(self, *, data_dir, force, verbose):
+                data_dir.mkdir(parents=True, exist_ok=True)
+                path = data_dir / "archive.html"
+                path.write_text("<html>Sign in</html>", encoding="utf-8")
+                return HtmlCollection(data_dir, SimpleNamespace(path=path))
+
+        spec = dataset_spec_from_url("https://example.test/protected")
+        retriever = DcatApHubRetriever(
+            dataset_factory=lambda _url: LoginPageDataset()
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(ValueError, "authentication"):
+                retriever.retrieve(spec, Path(temp_dir))
+
+    def test_dcat_adapter_reuses_configured_local_dataset_directory(self):
+        calls = []
+
+        class LocalCollection:
+            def __init__(self, root, assets):
+                self.root = root
+                self.assets = assets
+
+            def __iter__(self):
+                return iter(self.assets)
+
+        class LocalDataset:
+            title = "Local title"
+
+            def download(self, *, data_dir, force, verbose):
+                calls.append((data_dir, force, verbose))
+                asset = SimpleNamespace(path=data_dir / "table.csv")
+                return LocalCollection(data_dir, [asset])
+
+        spec = DatasetSpec(
+            key="local-example",
+            title="Local Example",
+            url="https://example.test/local",
+            local_dir_name="Local Dataset Directory",
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            local_dir = root / "Local Dataset Directory"
+            local_dir.mkdir()
+            (local_dir / "table.csv").write_text("x\n1\n", encoding="utf-8")
+            result = DcatApHubRetriever(
+                dataset_factory=lambda _url: self.fail("URL fetch was used"),
+                local_dataset_factory=lambda path: (
+                    calls.append(("factory", path)) or LocalDataset()
+                ),
+                verbose=False,
+            ).retrieve(spec, root, force=True)
+
+            self.assertEqual(local_dir, result.data_dir)
+            self.assertEqual((local_dir / "table.csv",), result.files)
+            self.assertEqual(("factory", local_dir), calls[0])
+            self.assertEqual((local_dir, False, False), calls[1])
 
 
 class PipelineArchitectureTests(unittest.TestCase):
@@ -275,6 +386,32 @@ class PipelineArchitectureTests(unittest.TestCase):
                 croissant_provenance["derived_from_agent_run"]["model"],
             )
 
+    def test_pipeline_runs_url_derived_spec(self):
+        retriever = FakeRetriever()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            prompt = root / "agent.md"
+            prompt.write_text("System prompt", encoding="utf-8")
+            pipeline = DataEngineeringPipeline(
+                retriever=retriever,
+                harness=FakeHarness(),
+                metadata_generator=FakeMetadataGenerator(),
+                config=PipelineConfig(
+                    workspace_root=root,
+                    prompt_path=prompt,
+                    model=ModelConfig("provider", "model"),
+                ),
+            )
+            spec = dataset_spec_from_url(
+                "https://catalog.example.org/dataset/example"
+            )
+
+            result = pipeline.run_spec(spec)
+
+            self.assertEqual(spec, result.dataset.spec)
+            self.assertEqual(spec, retriever.calls[0][0])
+            self.assertEqual(root / "data" / spec.key, result.dataset.data_dir)
+
     def test_repeated_runs_use_distinct_provider_model_output_directories(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
@@ -323,10 +460,10 @@ class PipelineArchitectureTests(unittest.TestCase):
 
             results = pipeline.run_examples()
 
-            self.assertEqual(3, len(results))
+            self.assertEqual(13, len(results))
             self.assertEqual(set(EXAMPLE_DATASETS), {result.dataset.spec.key for result in results})
-            self.assertEqual(3, len(harness.calls))
-            self.assertEqual(3, len(metadata_generator.calls))
+            self.assertEqual(13, len(harness.calls))
+            self.assertEqual(13, len(metadata_generator.calls))
 
     def test_pipeline_rejects_false_harness_completion_before_metadata(self):
         class MissingOutputHarness:
@@ -400,7 +537,6 @@ class PipelineArchitectureTests(unittest.TestCase):
             self.assertEqual([], harness.calls)
 
 
-@unittest.skipIf(OpencodeHarness is None, "OpenCode optional dependency is not installed")
 class OpencodeAdapterTests(unittest.TestCase):
     def test_adapter_translates_neutral_request_and_model(self):
         created_clients = []
@@ -467,7 +603,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             self.assertEqual("provider-x", chat["provider_id"])
             self.assertEqual("model-y", chat["model_id"])
             self.assertEqual({"temperature": 0}, chat["extra_body"])
-            self.assertTrue((output_dir / "opencode_report_session-1.md").is_file())
+            self.assertTrue((output_dir / "agent_transcript.md").is_file())
 
     def test_adapter_continues_idle_session_until_outputs_exist(self):
         created_clients = []
@@ -589,7 +725,7 @@ class OpencodeAdapterTests(unittest.TestCase):
 
             self.assertEqual(2, len(created_clients[0].session.chat_calls))
             self.assertTrue(
-                (output_dir / "opencode_report_session-stuck.md").is_file()
+                (output_dir / "agent_transcript.md").is_file()
             )
 
     def test_adapter_retries_no_provider_available(self):

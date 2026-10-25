@@ -6,24 +6,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-try:
-    from agentic_data_engineer.agent.opencode_sandbox import (
-        OpencodeSandboxManager,
-        read_sandbox_attestation,
-    )
-except ImportError:
-    OpencodeSandboxManager = None
-
-
-@unittest.skipIf(
-    OpencodeSandboxManager is None,
-    "OpenCode optional dependency is not installed",
+from agentic_data_engineer.agent.opencode_sandbox import (
+    OpencodeSandboxManager,
+    read_sandbox_attestation,
 )
+
+
 class OpencodeSandboxManagerTests(unittest.TestCase):
     def test_attestation_proves_container_write_reached_host_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir).resolve()
-            probe = output_dir / ".opencode-sandbox-live-probe"
+            probe = output_dir / ".opencode-sandbox-live-probe-matching-token"
             probe.write_text("matching-token", encoding="utf-8")
             response = io.BytesIO(
                 json.dumps(
@@ -54,7 +47,7 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
                 json.dumps(
                     {
                         "output_dir": str(output_dir),
-                        "probe_name": ".opencode-sandbox-live-probe",
+                        "probe_name": ".opencode-sandbox-live-probe-container-only-token",
                         "probe_token": "container-only-token",
                     }
                 ).encode("utf-8")
@@ -70,12 +63,35 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
                         output_dir,
                     )
 
+    def test_attestation_rejects_probe_name_not_derived_from_token(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir).resolve()
+            response = io.BytesIO(
+                json.dumps(
+                    {
+                        "output_dir": str(output_dir),
+                        "probe_name": "../elsewhere",
+                        "probe_token": "matching-token",
+                    }
+                ).encode("utf-8")
+            )
+
+            with patch(
+                "agentic_data_engineer.agent.opencode_sandbox.urlopen",
+                return_value=response,
+            ):
+                with self.assertRaisesRegex(ValueError, "no valid live-mount probe"):
+                    read_sandbox_attestation(
+                        "http://127.0.0.1:54322/marker",
+                        output_dir,
+                    )
+
     def test_attestation_accepts_run_directory_within_output_mount(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             output_root = Path(temp_dir).resolve()
             run_dir = output_root / "runs" / "one-run"
             run_dir.mkdir(parents=True)
-            probe = output_root / ".opencode-sandbox-live-probe"
+            probe = output_root / ".opencode-sandbox-live-probe-matching-token"
             probe.write_text("matching-token", encoding="utf-8")
             response = io.BytesIO(
                 json.dumps(
@@ -165,6 +181,7 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
                         str(launcher),
                         "start",
                         "chemical-process-safety",
+                        "chemical-process-safety",
                     ],
                 ),
                 args,
@@ -245,12 +262,12 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
     def test_kit_requires_nonempty_api_key_in_dotenv(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
-            (root / ".env").write_text("KIT_AI_API_KEY=\n", encoding="utf-8")
+            (root / ".env").write_text("KIT_TOOLBOX_API_KEY=\n", encoding="utf-8")
             manager = OpencodeSandboxManager(project_root=root)
 
             with self.assertRaisesRegex(
                 RuntimeError,
-                r"KIT_AI_API_KEY.*\.env",
+                r"KIT_TOOLBOX_API_KEY.*\.env",
             ):
                 manager.ensure(
                     "chemical-process-safety",
@@ -262,7 +279,7 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
             (root / ".env").write_text(
-                "KIT_AI_API_KEY=test-only-key\n",
+                "KIT_TOOLBOX_API_KEY=test-only-key\n",
                 encoding="utf-8",
             )
             marker = {

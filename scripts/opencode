@@ -2,13 +2,13 @@
 set -eu
 
 usage() {
-    echo "Usage: scripts/opencode {start|stop|logs|status|probe|config} <example-key>" >&2
-    echo "Example keys: tcm-predictive-maintenance, chemical-process-safety, industry-5-cyber-physical-systems" >&2
+    echo "Usage: scripts/opencode {start|stop|logs|status|probe|config} <dataset-key> [data-dir-name]" >&2
     exit 2
 }
 
 command_name=${1:-}
 example_key=${2:-}
+data_dir_name=${3:-$example_key}
 
 case "$command_name" in
     start|stop|logs|status|probe|config) ;;
@@ -16,13 +16,15 @@ case "$command_name" in
 esac
 
 case "$example_key" in
-    tcm-predictive-maintenance|chemical-process-safety|industry-5-cyber-physical-systems) ;;
-    *) usage ;;
+    ""|.*|*/*|*[!A-Za-z0-9._-]*) usage ;;
+esac
+case "$data_dir_name" in
+    ""|"."|".."|*/*) usage ;;
 esac
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 compose_file="$project_root/compose.opencode.yml"
-dataset_dir="$project_root/data/$example_key"
+dataset_dir="$project_root/data/$data_dir_name"
 output_dir="$project_root/output/$example_key"
 
 mkdir -p "$dataset_dir" "$output_dir"
@@ -33,6 +35,7 @@ export ADE_ROOT="$project_root"
 export ADE_UID
 export ADE_GID
 export EXAMPLE_KEY="$example_key"
+export DATA_DIR_NAME="$data_dir_name"
 
 case "$command_name" in
     start)

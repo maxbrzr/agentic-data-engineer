@@ -40,7 +40,7 @@ from pathlib import Path
 configured_providers = []
 if os.environ.get("SAIA_API_KEY", "").strip():
     configured_providers.append("gwdg")
-if os.environ.get("KIT_AI_API_KEY", "").strip():
+if os.environ.get("KIT_TOOLBOX_API_KEY", "").strip():
     configured_providers.append("kit")
 
 marker = {

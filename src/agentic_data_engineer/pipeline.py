@@ -12,6 +12,7 @@ from .contracts import (
     AgentRequest,
     DatasetMetadataGenerator,
     DatasetRetriever,
+    DatasetSpec,
     PipelineRunResult,
 )
 from .retrieval import get_example, list_examples
@@ -34,7 +35,18 @@ class DataEngineeringPipeline:
         self.config = config
 
     def run(self, example_key: str, *, force_download: bool | None = None) -> PipelineRunResult:
-        spec = get_example(example_key)
+        return self.run_spec(
+            get_example(example_key),
+            force_download=force_download,
+        )
+
+    def run_spec(
+        self,
+        spec: DatasetSpec,
+        *,
+        force_download: bool | None = None,
+    ) -> PipelineRunResult:
+        """Run the pipeline for a configured example or URL-derived spec."""
         retrieved = self.retriever.retrieve(
             spec,
             self.config.data_root,

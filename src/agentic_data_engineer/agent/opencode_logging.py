@@ -5,6 +5,8 @@ from typing import Any, TextIO
 
 from opencode_ai import Opencode
 
+from ..contracts import AGENT_LOG_NAME, AGENT_TRANSCRIPT_NAME
+
 
 def _to_jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
@@ -110,7 +112,7 @@ def _append_fenced(lines: list[str], text: str, language: str = "text", max_char
 
 def _build_session_report(messages: Any, session_id: str) -> tuple[str, list[dict[str, Any]]]:
     lines = [
-        f"# Opencode Session Report",
+        "# OpenCode Session Transcript",
         "",
         f"Session: `{session_id}`",
         "",
@@ -207,7 +209,7 @@ def watch_session_events(
 ) -> None:
     """Stream opencode events, print useful progress, and persist a readable run log."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    run_log = output_dir / f"opencode_run_{session_id}.log"
+    run_log = output_dir / AGENT_LOG_NAME
     event_client = client_factory(base_url=base_url)
 
     seen_text: dict[str, str] = {}
@@ -306,12 +308,12 @@ def watch_session_events(
 
 
 def save_session_messages(client: Opencode, session_id: str, output_dir: Path) -> dict[str, Path]:
-    """Persist the finished opencode session as a readable Markdown report."""
+    """Persist the finished opencode session as a readable Markdown transcript."""
     output_dir.mkdir(parents=True, exist_ok=True)
     messages = client.session.messages(session_id)
 
-    report_path = output_dir / f"opencode_report_{session_id}.md"
-    run_log_path = output_dir / f"opencode_run_{session_id}.log"
+    report_path = output_dir / AGENT_TRANSCRIPT_NAME
+    run_log_path = output_dir / AGENT_LOG_NAME
 
     report, _tools = _build_session_report(messages, session_id)
     report_path.write_text(report, encoding="utf-8")

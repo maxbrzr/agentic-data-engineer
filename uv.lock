@@ -28,12 +28,8 @@ dependencies = [
     { name = "dcat-ap-hub" },
     { name = "mlcroissant" },
     { name = "numpy" },
-    { name = "pandas" },
-]
-
-[package.optional-dependencies]
-opencode = [
     { name = "opencode-ai" },
+    { name = "pandas" },
 ]
 
 [package.metadata]
@@ -42,10 +38,9 @@ requires-dist = [
     { name = "dcat-ap-hub", specifier = ">=0.1.4" },
     { name = "mlcroissant", specifier = ">=1.1.0,<1.2.0" },
     { name = "numpy", specifier = ">=2.5.0" },
-    { name = "opencode-ai", marker = "extra == 'opencode'", specifier = ">=0.1.0a36" },
+    { name = "opencode-ai", specifier = ">=0.1.0a36" },
     { name = "pandas", specifier = ">=3.0.3" },
 ]
-provides-extras = ["opencode"]
 
 [[package]]
 name = "aiohappyeyeballs"

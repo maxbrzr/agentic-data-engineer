@@ -5,6 +5,7 @@ output/
 .jupyter-config/
 .matplotlib-cache/
 .ipynb_checkpoints/
+.pytest_cache/
 
 __pycache__/
 *.py[cod]
@@ -19,3 +20,4 @@ __pycache__/
 output/opencode_*
 
 API-GWDG.md
+DEMO.md

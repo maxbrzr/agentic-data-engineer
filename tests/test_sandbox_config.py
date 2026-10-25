@@ -1,38 +1,26 @@
-from pathlib import Path
 import json
 import unittest
+from pathlib import Path
 
+from agentic_data_engineer.agent.models import (
+    DEFAULT_MODEL_BY_PROVIDER,
+    DEFAULT_PROVIDER,
+    MODELS_BY_PROVIDER,
+    resolve_model_config,
+)
+from agentic_data_engineer.agent.model_sync import stale_files
+from agentic_data_engineer.contracts import ModelConfig
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_GWDG_MODELS = {
-    "apertus-70b-instruct-2509",
-    "deepseek-v4-flash",
-    "devstral-2-123b-instruct-2512",
-    "gemma-4-31b-it",
-    "glm-4.7",
-    "meta-llama-3.1-8b-instruct",
-    "mistral-medium-3.5-128b",
-    "openai-gpt-oss-120b",
-    "qwen3-30b-a3b-instruct-2507",
-    "qwen3-coder-next",
-    "qwen3-omni-30b-a3b-instruct",
-    "qwen3.5-122b-a10b",
-    "qwen3.5-397b-a17b",
-    "qwen3.6-27b",
-    "qwen3.6-35b-a3b",
-}
-EXPECTED_KIT_MODELS = {
-    "kit.mistral-small-4-119b-a8b",
-    "kit.deepseek-v4-flash",
-    "kit.glm-5.3-flash",
-}
+EXPECTED_GWDG_MODELS = set(MODELS_BY_PROVIDER["gwdg"])
+EXPECTED_KIT_MODELS = set(MODELS_BY_PROVIDER["kit"])
 
 
 class SandboxConfigurationTests(unittest.TestCase):
     def test_container_runs_pinned_opencode_as_non_root(self):
-        dockerfile = (
-            ROOT / "docker" / "opencode" / "Dockerfile"
-        ).read_text(encoding="utf-8")
+        dockerfile = (ROOT / "docker" / "opencode" / "Dockerfile").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("ARG OPENCODE_VERSION=1.18.9", dockerfile)
         self.assertIn('"opencode-ai@${OPENCODE_VERSION}"', dockerfile)
@@ -47,17 +35,15 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertIn("OPENCODE_CONFIG=/etc/opencode/opencode.json", dockerfile)
         self.assertIn('ENTRYPOINT ["opencode-entrypoint"]', dockerfile)
 
-        entrypoint = (
-            ROOT / "docker" / "opencode" / "entrypoint.sh"
-        ).read_text(encoding="utf-8")
+        entrypoint = (ROOT / "docker" / "opencode" / "entrypoint.sh").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("raw data mount is writable", entrypoint)
         self.assertIn("output mount is not writable", entrypoint)
         self.assertIn("agentic-data-engineer-sandbox.json", entrypoint)
 
     def test_compose_enforces_host_filesystem_boundary(self):
-        compose = (ROOT / "compose.opencode.yml").read_text(
-            encoding="utf-8"
-        )
+        compose = (ROOT / "compose.opencode.yml").read_text(encoding="utf-8")
 
         self.assertNotIn(
             'source: "${ADE_ROOT}"\n        target: "${ADE_ROOT}"',
@@ -71,7 +57,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertIn("OPENCODE_CONFIG: /etc/opencode/opencode.json", compose)
         self.assertNotIn("${ADE_ROOT}:rw,nosuid", compose)
         self.assertIn(
-            'source: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"',
+            'source: "${ADE_ROOT}/data/${DATA_DIR_NAME:?Set DATA_DIR_NAME}"',
             compose,
         )
         self.assertIn(
@@ -99,9 +85,9 @@ class SandboxConfigurationTests(unittest.TestCase):
             compose,
         )
 
-        container_config = (
-            ROOT / "docker" / "opencode" / "opencode.json"
-        ).read_text(encoding="utf-8")
+        container_config = (ROOT / "docker" / "opencode" / "opencode.json").read_text(
+            encoding="utf-8"
+        )
         parsed_config = json.loads(container_config)
         self.assertIn('"external_directory": "allow"', container_config)
         self.assertIn("gwdg", parsed_config["enabled_providers"])
@@ -114,61 +100,89 @@ class SandboxConfigurationTests(unittest.TestCase):
         )
         self.assertEqual("{env:SAIA_API_KEY}", gwdg["options"]["apiKey"])
         self.assertEqual(EXPECTED_GWDG_MODELS, set(gwdg["models"]))
+        default_model = (
+            f"{DEFAULT_PROVIDER}/{DEFAULT_MODEL_BY_PROVIDER[DEFAULT_PROVIDER]}"
+        )
+        self.assertEqual(default_model, parsed_config["model"])
+        self.assertEqual(default_model, parsed_config["small_model"])
         kit = parsed_config["provider"]["kit"]
         self.assertEqual("@ai-sdk/openai-compatible", kit["npm"])
         self.assertEqual(
             "https://ki-toolbox.scc.kit.edu/api/v1",
             kit["options"]["baseURL"],
         )
-        self.assertEqual("{env:KIT_AI_API_KEY}", kit["options"]["apiKey"])
+        self.assertEqual("{env:KIT_TOOLBOX_API_KEY}", kit["options"]["apiKey"])
         self.assertEqual(EXPECTED_KIT_MODELS, set(kit["models"]))
         self.assertNotRegex(container_config, r"Bearer\s+[A-Za-z0-9]")
         self.assertIn("path: .env", compose)
         self.assertNotIn(".env.opencode", compose)
         self.assertFalse((ROOT / ".opencode").exists())
 
-    def test_launcher_only_accepts_enabled_examples(self):
-        launcher = (ROOT / "scripts" / "opencode").read_text(
-            encoding="utf-8"
-        )
+    def test_launcher_accepts_safe_dataset_keys(self):
+        launcher = (ROOT / "scripts" / "opencode").read_text(encoding="utf-8")
 
-        for example_key in (
-            "tcm-predictive-maintenance",
-            "chemical-process-safety",
-            "industry-5-cyber-physical-systems",
-        ):
-            self.assertIn(example_key, launcher)
         self.assertIn('case "$example_key" in', launcher)
-        self.assertIn('ADE_UID=$(id -u)', launcher)
-        self.assertIn('ADE_GID=$(id -g)', launcher)
+        self.assertIn("*[!A-Za-z0-9._-]*", launcher)
+        self.assertIn("*/*", launcher)
+        self.assertIn("ADE_UID=$(id -u)", launcher)
+        self.assertIn("ADE_GID=$(id -g)", launcher)
         self.assertIn("--force-recreate", launcher)
 
     def test_cli_documents_automatic_sandbox_management(self):
-        cli = (
-            ROOT / "src" / "agentic_data_engineer" / "cli.py"
-        ).read_text(encoding="utf-8")
+        cli = (ROOT / "src" / "agentic_data_engineer" / "cli.py").read_text(
+            encoding="utf-8"
+        )
 
         self.assertIn("--no-manage-opencode-sandbox", cli)
         self.assertIn("--pi-stall-timeout", cli)
+        self.assertIn('"--url"', cli)
         self.assertNotIn("--skip-opencode-sandbox-check", cli)
         self.assertIn(
-            "sandbox_manager.ensure(key, required_provider=provider_id)",
+            "data_dir_name=spec.local_dir_name",
             cli,
         )
-        self.assertIn('elif provider_id == "kit":', cli)
-        self.assertIn('model_id = "kit.glm-5.3-flash"', cli)
+
+    def test_docker_model_configs_match_provider_catalog(self):
+        self.assertEqual(
+            [],
+            [path.name for path in stale_files(ROOT)],
+            "Docker model configs are stale; run scripts/sync-models",
+        )
+
+    def test_model_defaults_and_compatibility(self):
+        default = ModelConfig(
+            DEFAULT_PROVIDER, DEFAULT_MODEL_BY_PROVIDER[DEFAULT_PROVIDER]
+        )
+        self.assertEqual(resolve_model_config("opencode", None, None), default)
+        self.assertEqual(resolve_model_config("pi", None, None), default)
+        self.assertEqual(
+            resolve_model_config("pi", "gwdg", None),
+            ModelConfig("gwdg", "qwen3-coder-next"),
+        )
+        self.assertEqual(
+            resolve_model_config("pi", "kit", None),
+            ModelConfig("kit", "kit.glm-5.3-flash"),
+        )
+        self.assertEqual(
+            resolve_model_config("opencode", "opencode", None),
+            ModelConfig("opencode", "deepseek-v4.1-flash-free"),
+        )
+        self.assertEqual(
+            resolve_model_config("pi", "gwdg", "glm-5.3-flash"),
+            ModelConfig("gwdg", "glm-5.3-flash"),
+        )
+        with self.assertRaisesRegex(ValueError, "not supported by harness"):
+            resolve_model_config("pi", "opencode", None)
+        with self.assertRaisesRegex(ValueError, "not available from provider"):
+            resolve_model_config("opencode", "kit", "glm-5.3-flash")
 
     def test_pi_container_and_remote_models_are_restricted(self):
-        dockerfile = (ROOT / "docker" / "pi" / "Dockerfile").read_text(
-            encoding="utf-8"
-        )
+        dockerfile = (ROOT / "docker" / "pi" / "Dockerfile").read_text(encoding="utf-8")
         compose = (ROOT / "compose.pi.yml").read_text(encoding="utf-8")
         entrypoint = (ROOT / "docker" / "pi" / "entrypoint.sh").read_text(
             encoding="utf-8"
         )
-        runner = (ROOT / "docker" / "pi" / "runner.py").read_text(
-            encoding="utf-8"
-        )
+        runner = (ROOT / "docker" / "pi" / "runner.py").read_text(encoding="utf-8")
         models = json.loads(
             (ROOT / "docker" / "pi" / "models.json").read_text(encoding="utf-8")
         )
@@ -182,7 +196,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertIn('"read,bash,edit,write,grep,find,ls"', runner)
         self.assertIn("stdin=subprocess.DEVNULL", runner)
         self.assertIn(
-            'source: "${ADE_ROOT}/data/${EXAMPLE_KEY:?Set EXAMPLE_KEY}"',
+            'source: "${ADE_ROOT}/data/${DATA_DIR_NAME:?Set DATA_DIR_NAME}"',
             compose,
         )
         self.assertIn(
@@ -201,7 +215,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         kit = models["providers"]["kit"]
         self.assertEqual("openai-completions", kit["api"])
         self.assertEqual("https://ki-toolbox.scc.kit.edu/api/v1", kit["baseUrl"])
-        self.assertEqual("$KIT_AI_API_KEY", kit["apiKey"])
+        self.assertEqual("$KIT_TOOLBOX_API_KEY", kit["apiKey"])
         self.assertTrue(kit["authHeader"])
         self.assertEqual(EXPECTED_KIT_MODELS, {item["id"] for item in kit["models"]})
 
@@ -212,7 +226,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertIn(".env", gitignore)
         self.assertIn("!.env.example", gitignore)
         self.assertIn("SAIA_API_KEY=", template.splitlines())
-        self.assertIn("KIT_AI_API_KEY=", template.splitlines())
+        self.assertIn("KIT_TOOLBOX_API_KEY=", template.splitlines())
 
 
 if __name__ == "__main__":

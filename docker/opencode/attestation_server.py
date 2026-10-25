@@ -11,7 +11,9 @@ MARKER_PATH = Path(
     )
 )
 OUTPUT_DIR = Path(os.environ["ADE_OUTPUT_DIR"])
-PROBE_NAME = ".opencode-sandbox-live-probe"
+# Each probe gets a fresh file name: Docker Desktop's file sharing can keep a
+# stale entry for a name the host just deleted, so rewriting it fails (ENOENT).
+PROBE_PREFIX = ".opencode-sandbox-live-probe-"
 
 
 class AttestationHandler(BaseHTTPRequestHandler):
@@ -32,11 +34,12 @@ class AttestationHandler(BaseHTTPRequestHandler):
         try:
             marker = json.loads(MARKER_PATH.read_text(encoding="utf-8"))
             probe_token = secrets.token_hex(16)
-            (OUTPUT_DIR / PROBE_NAME).write_text(
+            probe_name = PROBE_PREFIX + probe_token
+            (OUTPUT_DIR / probe_name).write_text(
                 probe_token,
                 encoding="utf-8",
             )
-            marker["probe_name"] = PROBE_NAME
+            marker["probe_name"] = probe_name
             marker["probe_token"] = probe_token
             payload = json.dumps(marker, sort_keys=True).encode("utf-8")
         except Exception as exc:

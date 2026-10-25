@@ -2,25 +2,27 @@
 set -eu
 
 usage() {
-    echo "Usage: scripts/pi run <example-key> <request-file>" >&2
-    echo "Example keys: tcm-predictive-maintenance, chemical-process-safety, industry-5-cyber-physical-systems" >&2
+    echo "Usage: scripts/pi run <dataset-key> <data-dir-name> <request-file>" >&2
     exit 2
 }
 
 [ "${1:-}" = "run" ] || usage
 example_key=${2:-}
-request_file=${3:-}
+data_dir_name=${3:-}
+request_file=${4:-}
 
 case "$example_key" in
-    tcm-predictive-maintenance|chemical-process-safety|industry-5-cyber-physical-systems) ;;
-    *) usage ;;
+    ""|.*|*/*|*[!A-Za-z0-9._-]*) usage ;;
+esac
+case "$data_dir_name" in
+    ""|"."|".."|*/*) usage ;;
 esac
 
 [ -f "$request_file" ] || usage
 
 project_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 compose_file="$project_root/compose.pi.yml"
-dataset_dir="$project_root/data/$example_key"
+dataset_dir="$project_root/data/$data_dir_name"
 output_dir="$project_root/output/$example_key"
 
 case "$request_file" in
@@ -39,6 +41,7 @@ export ADE_ROOT="$project_root"
 export ADE_UID
 export ADE_GID
 export EXAMPLE_KEY="$example_key"
+export DATA_DIR_NAME="$data_dir_name"
 export PI_REQUEST_FILE="$request_file"
 
 exec docker compose --file "$compose_file" run \

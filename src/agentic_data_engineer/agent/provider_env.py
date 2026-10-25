@@ -1,9 +1,11 @@
 from pathlib import Path
 
+from .models import PROVIDER_CATALOG
 
 PROVIDER_ENV_REQUIREMENTS = {
-    "gwdg": "SAIA_API_KEY",
-    "kit": "KIT_AI_API_KEY",
+    provider.id: provider.api_key_env
+    for provider in PROVIDER_CATALOG.values()
+    if provider.api_key_env
 }
 
 

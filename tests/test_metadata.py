@@ -40,7 +40,6 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
                             "@value": "A test dataset with prepared ML splits.",
                         },
                         "dct:creator": [{"@id": "https://example.test/creator"}],
-                        "dct:issued": {"@value": "2026-01-02"},
                         "dct:modified": {"@value": "2026-01-03"},
                         "dct:identifier": "10.1234/example",
                         "dcat:keyword": [{"@value": "testing"}],
@@ -199,11 +198,52 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 ValueError,
-                r"description.*license.*citation.*date_published.*creators",
+                r"description.*license.*citation.*creators",
             ):
                 CroissantBakerMetadataGenerator().preflight(
                     RetrievedDataset(spec, data_dir, spec.title)
                 )
+
+    def test_preflight_allows_missing_publication_date(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            data_dir = Path(temp_dir).resolve()
+            (data_dir / "dcat-metadata.jsonld").write_text(
+                json.dumps(
+                    {
+                        "@graph": [
+                            {
+                                "@id": "https://example.test/creator",
+                                "@type": "foaf:Agent",
+                                "foaf:name": "Test Creator",
+                            },
+                            {
+                                "@type": "dcat:Distribution",
+                                "dct:license": "cc0-1.0",
+                            },
+                            {
+                                "@type": "dcat:Dataset",
+                                "dct:title": "Dataset without issued date",
+                                "dct:description": "A valid dataset description.",
+                                "dct:creator": {
+                                    "@id": "https://example.test/creator"
+                                },
+                                "dct:identifier": "dataset-123",
+                                "dct:modified": {"@value": "2025-06-10"},
+                            },
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            spec = DatasetSpec(
+                "without-issued",
+                "Dataset without issued date",
+                "https://example.test/dataset",
+            )
+
+            CroissantBakerMetadataGenerator().preflight(
+                RetrievedDataset(spec, data_dir, spec.title)
+            )
 
 
 if __name__ == "__main__":
