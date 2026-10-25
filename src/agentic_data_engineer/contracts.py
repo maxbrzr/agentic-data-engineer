@@ -109,6 +109,29 @@ class DatasetMetadataGenerator(Protocol):
 
 
 @dataclass(frozen=True, slots=True)
+class ProcessorCheckResult:
+    """Outcome of re-running a packaged dataset folder's processor."""
+
+    checker: str
+    sha256: Mapping[str, str]
+    runtime: str
+
+
+@runtime_checkable
+class ProcessorChecker(Protocol):
+    """Port that re-runs processor.py in a packaged dataset folder, isolated from the host."""
+
+    @property
+    def name(self) -> str: ...
+
+    def check(
+        self, package_dir: Path, expected: Mapping[str, Path]
+    ) -> ProcessorCheckResult:
+        """Run the processor and raise unless every expected file is reproduced."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
 class PipelineRunResult:
     """Complete result of retrieval, agent processing, and metadata generation."""
 

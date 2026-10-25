@@ -17,6 +17,7 @@ from .agent.models import (
 from .config import PipelineConfig
 from .metadata import CroissantBakerMetadataGenerator
 from .pipeline import DataEngineeringPipeline
+from .processor_check import DockerProcessorChecker
 from .retrieval import (
     EXAMPLE_DATASETS,
     DcatApHubRetriever,
@@ -293,6 +294,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             pi_stall_timeout_seconds=args.pi_stall_timeout,
         ),
         metadata_generator=CroissantBakerMetadataGenerator(),
+        processor_checker=DockerProcessorChecker(workspace_root),
         config=config,
     )
 

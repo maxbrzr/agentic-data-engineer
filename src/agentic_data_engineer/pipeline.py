@@ -16,13 +16,17 @@ from .contracts import (
     DatasetRetriever,
     DatasetSpec,
     PipelineRunResult,
+    ProcessorChecker,
 )
 from .retrieval import get_example, list_examples
 
+from dcat_ap_hub import add_processor
+from dcat_ap_hub.metadata.constants import PROCESSOR_FILENAME, SPLIT_FILES
+
 SOURCE_DATA_DIR_NAME = "data"
 DATASET_METADATA_NAME = "dcat-metadata.jsonld"
-# dcat-ap-hub's processor profile; marks parser.py as the dataset's processor.
-PROCESSOR_PROFILE_URI = "http://example.org/profiles/Processor"
+# Artifacts every successful agent run must leave in its output directory.
+REQUIRED_AGENT_OUTPUTS = (PROCESSOR_FILENAME, *SPLIT_FILES)
 
 
 class DataEngineeringPipeline:
@@ -34,11 +38,13 @@ class DataEngineeringPipeline:
         retriever: DatasetRetriever,
         harness: AgentHarness,
         metadata_generator: DatasetMetadataGenerator,
+        processor_checker: ProcessorChecker,
         config: PipelineConfig,
     ) -> None:
         self.retriever = retriever
         self.harness = harness
         self.metadata_generator = metadata_generator
+        self.processor_checker = processor_checker
         self.config = config
 
     def run(self, example_key: str, *, force_download: bool | None = None) -> PipelineRunResult:
@@ -76,9 +82,18 @@ class DataEngineeringPipeline:
         # Copied only after the agent and metadata steps, so the agent never
         # gets a writable copy of the raw data.
         source_data = self.copy_source_data(retrieved.data_dir, output_dir)
-        source_data["dataset_package"] = self.build_dataset_package(
-            output_dir, retrieved.spec
+        package = self.build_dataset_package(output_dir, retrieved.spec)
+        # Fails the run unless dcat-ap-hub would reproduce the exported split.
+        check = self.processor_checker.check(
+            output_dir / SOURCE_DATA_DIR_NAME,
+            {name: output_dir / name for name in SPLIT_FILES},
         )
+        package["processor_check"] = {
+            "checker": check.checker,
+            "reproduced": sorted(check.sha256),
+            "runtime": check.runtime,
+        }
+        source_data["dataset_package"] = package
         self._write_provenance(
             provenance_path,
             retrieved,
@@ -115,11 +130,11 @@ class DataEngineeringPipeline:
             "Follow the system instructions completely. "
             f"The read-only local dataset is in {data_dir}. "
             f"Write every generated artifact to {output_dir}. "
-            f"Analyze the dataset, create the reusable parser at {output_dir / 'parser.py'}, "
+            f"Analyze the dataset, create the reusable processor at {output_dir / PROCESSOR_FILENAME}, "
             "run all applicable tabular validations, and export validated train/test "
             "splits. The pipeline generates and validates croissant.json after your run; "
-            "do not create or edit that file. Do not report success unless parser.py, "
-            "train.csv, and test.csv exist, process() in parser.py reproduces them, "
+            "do not create or edit that file. Do not report success unless processor.py, "
+            "train.csv, and test.csv exist, process() in processor.py reproduces them, "
             "and every applicable tabular validation passes."
         )
 
@@ -142,7 +157,7 @@ class DataEngineeringPipeline:
         """Reject harness completion unless required artifacts reached the host."""
         missing = [
             name
-            for name in ("parser.py", "train.csv", "test.csv")
+            for name in REQUIRED_AGENT_OUTPUTS
             if not (output_dir / name).is_file()
         ]
         if missing:
@@ -150,24 +165,24 @@ class DataEngineeringPipeline:
                 f"Agent run {run_id!r} reported completion, but required host "
                 f"artifacts are missing from {output_dir}: {missing}."
             )
-        if not DataEngineeringPipeline._defines_process(output_dir / "parser.py"):
+        if not DataEngineeringPipeline._defines_process(output_dir / PROCESSOR_FILENAME):
             raise ValueError(
-                f"Agent run {run_id!r} reported completion, but parser.py does not "
-                "define the module-level process(input_files, output_dir) function "
+                f"Agent run {run_id!r} reported completion, but processor.py does not "
+                "define the module-level process(data_dir, output_dir) function "
                 "required by dcat-ap-hub."
             )
 
     @staticmethod
-    def _defines_process(parser_path: Path) -> bool:
+    def _defines_process(processor_path: Path) -> bool:
         """Check statically (without executing agent code) for process()."""
         try:
-            tree = ast.parse(parser_path.read_text(encoding="utf-8"))
+            tree = ast.parse(processor_path.read_text(encoding="utf-8"))
         except (OSError, SyntaxError, ValueError):
             return False
         return any(
             isinstance(node, ast.FunctionDef)
             and node.name == "process"
-            and len(node.args.args) >= 2
+            and len(node.args.args) == 2
             for node in tree.body
         )
 
@@ -191,23 +206,22 @@ class DataEngineeringPipeline:
         """
         Make <output_dir>/data a dcat-ap-hub dataset folder.
 
-        Adds a copy of parser.py and a draft dcat-metadata.jsonld that declares it
-        as the dataset's processor, so ``Dataset.from_directory(<run>/data)``
-        followed by ``.process()`` works before the data is published. The
-        published metadata replaces the draft.
+        Adds a copy of processor.py and a draft dcat-metadata.jsonld that
+        declares it as the dataset's processor (built by dcat-ap-hub's
+        ``add_processor``), so ``Dataset.from_directory(<run>/data).process()``
+        works before the data is published. The processor URL is relative: it
+        stays valid when the folder is published as is.
         """
         data_dir = output_dir / SOURCE_DATA_DIR_NAME
-        processor = data_dir / "parser.py"
-        shutil.copy2(output_dir / "parser.py", processor)
+        processor = data_dir / PROCESSOR_FILENAME
+        shutil.copy2(output_dir / PROCESSOR_FILENAME, processor)
         metadata_path = data_dir / DATASET_METADATA_NAME
         try:
             document = json.loads(metadata_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             document = {}
-        metadata_path.write_text(
-            json.dumps(cls._with_processor(document, spec), indent=2) + "\n",
-            encoding="utf-8",
-        )
+        document = add_processor(document, dataset_id=spec.url, title=spec.title)
+        metadata_path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
         return {
             "processor": {
                 "path": f"{SOURCE_DATA_DIR_NAME}/{processor.name}",
@@ -219,53 +233,6 @@ class DataEngineeringPipeline:
                 "sha256": cls._sha256(metadata_path),
             },
         }
-
-    @staticmethod
-    def _with_processor(document: dict, spec: DatasetSpec) -> dict:
-        graph = document.get("@graph")
-        if not isinstance(graph, list):
-            graph = [document] if document.get("@type") else []
-        dataset = next(
-            (
-                node
-                for node in graph
-                if isinstance(node, dict)
-                and "dcat:Dataset" in (
-                    node.get("@type")
-                    if isinstance(node.get("@type"), list)
-                    else [node.get("@type")]
-                )
-            ),
-            None,
-        )
-        if dataset is None:
-            dataset = {"@id": spec.url, "@type": "dcat:Dataset", "dct:title": spec.title}
-            graph.insert(0, dataset)
-        processor_id = f"{dataset.get('@id') or spec.url}#processor"
-        graph = [
-            node
-            for node in graph
-            if not (isinstance(node, dict) and node.get("@id") == processor_id)
-        ]
-        graph.append(
-            {
-                "@id": processor_id,
-                "@type": "rdfs:Resource",
-                "dct:title": "parser.py",
-                "dct:description": "Generated processor producing train.csv and test.csv.",
-                "dct:format": "text/x-python",
-                "dct:conformsTo": PROCESSOR_PROFILE_URI,
-                "dcat:downloadURL": "parser.py",
-            }
-        )
-        relations = dataset.get("dct:relation", [])
-        relations = relations if isinstance(relations, list) else [relations]
-        if not any(
-            isinstance(item, dict) and item.get("@id") == processor_id for item in relations
-        ):
-            relations.append({"@id": processor_id})
-        dataset["dct:relation"] = relations
-        return {**document, "@graph": graph}
 
     def _write_provenance(
         self,
@@ -284,7 +251,7 @@ class DataEngineeringPipeline:
             "message_id": agent_result.message_id,
         }
         artifacts: dict[str, dict] = {}
-        for name in ("parser.py", "train.csv", "test.csv"):
+        for name in REQUIRED_AGENT_OUTPUTS:
             artifact_path = path.parent / name
             artifacts[name] = {
                 "producer_type": "agent",

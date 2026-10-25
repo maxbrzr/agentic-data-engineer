@@ -14,13 +14,10 @@ RUN npm install --global "opencode-ai@${OPENCODE_VERSION}"
 
 WORKDIR /opt/agentic-data-engineer
 
+COPY docker/processor/requirements.txt /opt/agent-runtime-requirements.txt
 RUN python3 -m venv /opt/agent-runtime \
     && /opt/agent-runtime/bin/pip install --no-cache-dir \
-        numpy==2.5.1 \
-        openpyxl==3.1.5 \
-        pandas==3.0.5 \
-        pyarrow==25.0.0 \
-        scikit-learn==1.9.0
+        -r /opt/agent-runtime-requirements.txt
 
 COPY src ./src
 COPY docker/opencode/attestation_server.py ./attestation_server.py

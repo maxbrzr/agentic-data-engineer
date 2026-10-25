@@ -16,6 +16,7 @@ from agentic_data_engineer.contracts import (
     DatasetSpec,
     MetadataGenerationResult,
     ModelConfig,
+    ProcessorCheckResult,
     RetrievedDataset,
 )
 from agentic_data_engineer.pipeline import DataEngineeringPipeline
@@ -58,9 +59,9 @@ class FakeHarness:
     def run(self, request, model):
         self.calls.append((request, model))
         self.saw_data_copy = (request.output_dir / "data").exists()
-        artifact = request.output_dir / "parser.py"
+        artifact = request.output_dir / "processor.py"
         artifact.write_text(
-            "def process(input_files, output_dir):\n    pass\n", encoding="utf-8"
+            "def process(data_dir, output_dir):\n    pass\n", encoding="utf-8"
         )
         train = request.output_dir / "train.csv"
         test = request.output_dir / "test.csv"
@@ -95,9 +96,28 @@ class FakeMetadataGenerator:
 
     @staticmethod
     def assert_agent_outputs_exist(output_dir):
-        for name in ("parser.py", "train.csv", "test.csv"):
+        for name in ("processor.py", "train.csv", "test.csv"):
             if not (output_dir / name).is_file():
                 raise AssertionError(f"Metadata ran before the agent created {name}")
+
+
+class FakeProcessorChecker:
+    """Stands in for the isolated re-run; records what it was asked to check."""
+
+    def __init__(self):
+        self.calls = []
+
+    @property
+    def name(self):
+        return "fake-processor-check"
+
+    def check(self, package_dir, expected):
+        self.calls.append((package_dir, dict(expected)))
+        return ProcessorCheckResult(
+            checker=self.name,
+            sha256={name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in expected.items()},
+            runtime="fake",
+        )
 
 
 class CatalogAndRetrievalTests(unittest.TestCase):
@@ -320,6 +340,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 retriever=retriever,
                 harness=harness,
                 metadata_generator=metadata_generator,
+                processor_checker=FakeProcessorChecker(),
                 config=config,
             )
 
@@ -398,10 +419,10 @@ class PipelineArchitectureTests(unittest.TestCase):
                 source_data["files"],
             )
             package = source_data["dataset_package"]
-            self.assertEqual("data/parser.py", package["processor"]["path"])
+            self.assertEqual("data/processor.py", package["processor"]["path"])
             self.assertEqual(
-                (request.output_dir / "parser.py").read_bytes(),
-                (request.output_dir / "data" / "parser.py").read_bytes(),
+                (request.output_dir / "processor.py").read_bytes(),
+                (request.output_dir / "data" / "processor.py").read_bytes(),
             )
             draft = json.loads(
                 (request.output_dir / "data" / "dcat-metadata.jsonld").read_text(
@@ -414,7 +435,15 @@ class PipelineArchitectureTests(unittest.TestCase):
                 [{"@id": processor_node["@id"]}], dataset_node["dct:relation"]
             )
             self.assertEqual("rdfs:Resource", processor_node["@type"])
-            self.assertEqual("parser.py", processor_node["dcat:downloadURL"])
+            self.assertEqual("processor.py", processor_node["dcat:downloadURL"])
+            self.assertEqual(
+                {"@id": "https://data.hammerhai.eu/vocab/Processor"},
+                processor_node["dct:conformsTo"],
+            )
+            self.assertEqual(
+                {"checker": "fake-processor-check", "reproduced": ["test.csv", "train.csv"], "runtime": "fake"},
+                package["processor_check"],
+            )
 
     def test_pipeline_runs_url_derived_spec(self):
         retriever = FakeRetriever()
@@ -426,6 +455,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 retriever=retriever,
                 harness=FakeHarness(),
                 metadata_generator=FakeMetadataGenerator(),
+                processor_checker=FakeProcessorChecker(),
                 config=PipelineConfig(
                     workspace_root=root,
                     prompt_path=prompt,
@@ -451,6 +481,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 retriever=FakeRetriever(),
                 harness=FakeHarness(),
                 metadata_generator=FakeMetadataGenerator(),
+                processor_checker=FakeProcessorChecker(),
                 config=PipelineConfig(
                     workspace_root=root,
                     prompt_path=prompt,
@@ -481,6 +512,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 retriever=retriever,
                 harness=harness,
                 metadata_generator=metadata_generator,
+                processor_checker=FakeProcessorChecker(),
                 config=PipelineConfig(
                     workspace_root=root,
                     prompt_path=prompt,
@@ -495,11 +527,11 @@ class PipelineArchitectureTests(unittest.TestCase):
             self.assertEqual(13, len(harness.calls))
             self.assertEqual(13, len(metadata_generator.calls))
 
-    def test_pipeline_rejects_parser_without_process_entry_point(self):
+    def test_pipeline_rejects_processor_without_process_entry_point(self):
         class NoProcessHarness(FakeHarness):
             def run(self, request, model):
                 result = super().run(request, model)
-                (request.output_dir / "parser.py").write_text(
+                (request.output_dir / "processor.py").write_text(
                     "def parse(data_dir, target_col):\n    pass\n", encoding="utf-8"
                 )
                 return result
@@ -513,6 +545,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 retriever=FakeRetriever(),
                 harness=NoProcessHarness(),
                 metadata_generator=metadata_generator,
+                processor_checker=FakeProcessorChecker(),
                 config=PipelineConfig(
                     workspace_root=root,
                     prompt_path=prompt,
@@ -520,7 +553,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 ),
             )
 
-            with self.assertRaisesRegex(ValueError, "process\\(input_files, output_dir\\)"):
+            with self.assertRaisesRegex(ValueError, "process\\(data_dir, output_dir\\)"):
                 pipeline.run("tcm-predictive-maintenance")
             self.assertEqual([], metadata_generator.calls)
 
@@ -531,7 +564,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 return "missing-output"
 
             def run(self, request, _model):
-                (request.output_dir / "parser.py").write_text(
+                (request.output_dir / "processor.py").write_text(
                     "# incomplete\n",
                     encoding="utf-8",
                 )
@@ -551,6 +584,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 retriever=retriever,
                 harness=MissingOutputHarness(),
                 metadata_generator=metadata_generator,
+                processor_checker=FakeProcessorChecker(),
                 config=PipelineConfig(
                     workspace_root=root,
                     prompt_path=prompt,
@@ -580,6 +614,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 retriever=retriever,
                 harness=harness,
                 metadata_generator=RejectingMetadataGenerator(),
+                processor_checker=FakeProcessorChecker(),
                 config=PipelineConfig(
                     workspace_root=root,
                     prompt_path=prompt,
@@ -610,7 +645,7 @@ class OpencodeAdapterTests(unittest.TestCase):
 
             def chat(self, session_id, **kwargs):
                 self.chat_calls.append((session_id, kwargs))
-                for name in ("parser.py", "train.csv", "test.csv"):
+                for name in ("processor.py", "train.csv", "test.csv"):
                     (artifact_dir / name).write_text("generated\n", encoding="utf-8")
                 return SimpleNamespace(id="message-1")
 
@@ -678,7 +713,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             def chat(self, session_id, **kwargs):
                 self.chat_calls.append((session_id, kwargs))
                 if len(self.chat_calls) == 2:
-                    for name in ("parser.py", "train.csv", "test.csv"):
+                    for name in ("processor.py", "train.csv", "test.csv"):
                         (artifact_dir / name).write_text(
                             "generated\n",
                             encoding="utf-8",
@@ -803,7 +838,7 @@ class OpencodeAdapterTests(unittest.TestCase):
                 self.chat_calls.append((session_id, kwargs))
                 if len(self.chat_calls) == 1:
                     return SimpleNamespace(id=None)
-                for name in ("parser.py", "train.csv", "test.csv"):
+                for name in ("processor.py", "train.csv", "test.csv"):
                     (artifact_dir / name).write_text("generated\n", encoding="utf-8")
                 return SimpleNamespace(id="retried-message")
 
@@ -880,7 +915,7 @@ class OpencodeAdapterTests(unittest.TestCase):
                 return SimpleNamespace(id="preflight-session")
 
             def chat(self, _session_id, **_kwargs):
-                for name in ("parser.py", "train.csv", "test.csv"):
+                for name in ("processor.py", "train.csv", "test.csv"):
                     (artifact_dir / name).write_text("generated\n", encoding="utf-8")
                 return SimpleNamespace(id="message")
 

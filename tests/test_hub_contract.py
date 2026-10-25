@@ -7,8 +7,8 @@ Covers both ends of the hub in the VISION.md lifecycle:
 2. the package published under a URL -> ``Dataset.from_url()`` -> download ->
    ``process()`` reproduces train/test.
 
-The agent itself is replaced by a fixed parser.py, so this test checks only the
-interfaces, not the model.
+The agent itself is replaced by a fixed processor.py, so this test checks only
+the interfaces, not the model.
 """
 
 import functools
@@ -21,27 +21,31 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from dcat_ap_hub import Dataset
-from dcat_ap_hub.metadata.constants import PROCESSOR_PROFILE_URIS
+from dcat_ap_hub.metadata.constants import PROCESSOR_PROFILE_URI, SPLIT_FILES
 from dcat_ap_hub.processing.processor import apply_processor_logic
 
-from agentic_data_engineer.pipeline import PROCESSOR_PROFILE_URI, DataEngineeringPipeline
+from agentic_data_engineer.pipeline import DataEngineeringPipeline
 from agentic_data_engineer.retrieval import DcatApHubRetriever, dataset_spec_from_url
 
 # Stands in for the agent's generated processor; follows the prompt's contract.
-PARSER = '''
+PROCESSOR = '''
 from pathlib import Path
 
 import pandas as pd
 
 
-def parse(input_files):
-    tables = sorted(p for p in input_files if p.suffix == ".csv")
+def parse(data_dir):
+    data_dir = Path(data_dir)
+    tables = sorted(
+        p for p in data_dir.rglob("*.csv")
+        if "processed" not in p.relative_to(data_dir).parts
+    )
     frames = [pd.read_csv(p, float_precision="round_trip") for p in tables]
     return pd.concat(frames, ignore_index=True).sort_values("id", kind="stable")
 
 
-def process(input_files, output_dir):
-    df = parse([Path(p) for p in input_files])
+def process(data_dir, output_dir):
+    df = parse(data_dir)
     test = df["id"] % 5 == 0
     df[~test].to_csv(Path(output_dir) / "train.csv", index=False)
     df[test].to_csv(Path(output_dir) / "test.csv", index=False)
@@ -118,24 +122,25 @@ class HubContractTests(unittest.TestCase):
         retrieved = DcatApHubRetriever(verbose=False).retrieve(spec, self.root / "data")
         output_dir = self.root / "output" / spec.key / "run"
         output_dir.mkdir(parents=True)
-        (output_dir / "parser.py").write_text(PARSER)
-        inputs = [
-            path for path in retrieved.files if path.name != "dcat-metadata.jsonld"
-        ]
-        apply_processor_logic(output_dir / "parser.py", inputs, output_dir)
+        (output_dir / "processor.py").write_text(PROCESSOR)
+        apply_processor_logic(output_dir / "processor.py", retrieved.data_dir, output_dir)
         DataEngineeringPipeline._require_agent_outputs(output_dir, "fake-run")
         DataEngineeringPipeline.copy_source_data(retrieved.data_dir, output_dir)
         DataEngineeringPipeline.build_dataset_package(output_dir, spec)
         return retrieved, output_dir
 
     def assertReproduces(self, processed: Path, output_dir: Path):
-        for name in ("train.csv", "test.csv"):
+        for name in SPLIT_FILES:
             self.assertEqual(
                 _sha256(processed / name), _sha256(output_dir / name), name
             )
 
-    def test_processor_profile_matches_hub(self):
-        self.assertIn(PROCESSOR_PROFILE_URI, PROCESSOR_PROFILE_URIS)
+    def test_draft_record_declares_processor_with_hub_profile(self):
+        _, output_dir = self._run_fake_agent()
+        draft = json.loads((output_dir / "data" / "dcat-metadata.jsonld").read_text())
+        [processor] = [n for n in draft["@graph"] if n.get("@id", "").endswith("#processor")]
+        self.assertEqual({"@id": PROCESSOR_PROFILE_URI}, processor["dct:conformsTo"])
+        self.assertEqual("processor.py", processor["dcat:downloadURL"])
 
     def test_hub_folder_is_safe_and_holds_every_file(self):
         retrieved, _ = self._run_fake_agent()
@@ -155,22 +160,24 @@ class HubContractTests(unittest.TestCase):
 
     def test_published_package_processes_from_url(self):
         _, output_dir = self._run_fake_agent()
-        # Stand-in for the missing publish step (VISION.md I-8): host parser.py
-        # and turn the draft's relative processor URL into an absolute one.
+        # Publishing = hosting the draft record next to processor.py: its
+        # relative processor URL resolves against the record's URL.
         hosted = self.remote / "ai-ready"
         hosted.mkdir()
-        (hosted / "parser.py").write_bytes((output_dir / "data" / "parser.py").read_bytes())
-        draft = json.loads((output_dir / "data" / "dcat-metadata.jsonld").read_text())
-        for node in draft["@graph"]:
-            if node.get("dcat:downloadURL") == "parser.py":
-                node["dcat:downloadURL"] = {"@id": f"{self.base}/ai-ready/parser.py"}
-        (hosted / "record.jsonld").write_text(json.dumps(draft))
+        for name in ("processor.py", "dcat-metadata.jsonld"):
+            (hosted / name).write_bytes((output_dir / "data" / name).read_bytes())
 
-        ds = Dataset.from_url(f"{self.base}/ai-ready/record.jsonld")
-        ds.download(data_dir=self.root / "consumer", verbose=False)
+        ds = Dataset.from_url(f"{self.base}/ai-ready/dcat-metadata.jsonld")
+        files = ds.download(data_dir=self.root / "consumer", verbose=False)
+        self.assertIn("processor.py", {f.path.name for f in files})
         ds.process(verbose=False)
 
         self.assertReproduces(ds.processed_path, output_dir)
+
+        # The downloaded folder works offline as well.
+        offline = Dataset.from_directory(files.root)
+        offline.process(force=True, verbose=False)
+        self.assertReproduces(offline.processed_path, output_dir)
 
 
 if __name__ == "__main__":

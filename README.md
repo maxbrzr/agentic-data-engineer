@@ -2,7 +2,7 @@
 
 Agentic Data Engineer turns raw tabular datasets into reproducible, ML-ready
 outputs. An agent inspects the data, chooses a task and leakage-aware split,
-creates a reusable parser, and exports validated train/test data. The pipeline
+creates a reusable processor, and exports validated train/test data. The pipeline
 then generates ML Croissant metadata and provenance.
 
 OpenCode is the default agent harness. Pi is available as an alternative. Both
@@ -176,8 +176,10 @@ configured example
     → dcat-ap-hub retrieval
     → DCAT metadata preflight
     → OpenCode or Pi agent
-    → parser.py + train.csv + test.csv
+    → processor.py + train.csv + test.csv
     → Croissant Baker
+    → dataset package (data/ for dcat-ap-hub)
+    → isolated processor check
     → croissant.json + provenance.json
 ```
 
@@ -202,6 +204,14 @@ and their outputs are outside the writable boundary.
 
 OpenCode runs as a local service; Pi runs as a disposable one-shot container.
 
+After the agent, the pipeline re-runs `processor.py` on the packaged `data/`
+folder in a separate one-shot container (`compose.processor.yml`): no network,
+read-only filesystem except that folder, and the same Python packages as the
+agents (`docker/processor/requirements.txt`). It calls
+`process(data_dir, data_dir/processed)` exactly as dcat-ap-hub does and rejects
+the run unless `train.csv` and `test.csv` are byte-identical to the agent's
+exports. Generated code never runs on the host.
+
 ## Outputs
 
 Each run has a unique provider/model-qualified directory, so runs never
@@ -209,28 +219,30 @@ overwrite one another:
 
 ```text
 output/<example>/runs/<timestamp>__<provider>__<model>__<run-id>/
-├── parser.py
+├── processor.py
 ├── train.csv
 ├── test.csv
 ├── croissant.json
 ├── provenance.json
 ├── data/                  # dcat-ap-hub dataset folder, added after the agent run
 │   ├── <original files>
-│   ├── parser.py          # copy of the generated processor
+│   ├── processor.py       # copy of the generated processor
 │   └── dcat-metadata.jsonld  # draft: original metadata + processor entry
 ├── agent.log              # live agent log, written during the run
 └── agent_transcript.md    # full session transcript, written at the end
 ```
 
 `provenance.json` records the harness, provider, model, run IDs, and artifact
-hashes, plus a hash for every file in `data/`. The raw data is copied only after
-the agent finishes, so the agent never gets a writable copy. Files from failed
-runs remain available for diagnosis.
+hashes, a hash for every file in `data/`, and the result and runtime of the
+processor check. The raw data is copied only after the agent finishes, so the
+agent never gets a writable copy. Files from failed runs remain available for
+diagnosis.
 
-`parser.py` defines a module-level `process(input_files, output_dir)` function,
-so each run's `data/` folder can be processed with
-[dcat-ap-hub](https://github.com/maxbrzr/dcat-ap-hub) without installing it in the
-sandbox:
+`processor.py` defines a module-level `process(data_dir, output_dir)` function,
+and `data/dcat-metadata.jsonld` is the original record plus an `rdfs:Resource`
+for it with `dct:conformsTo` `https://data.hammerhai.eu/vocab/Processor`, linked
+via `dct:relation` (written by dcat-ap-hub's `add_processor`). So each run's
+`data/` folder is a complete dcat-ap-hub dataset before anything is uploaded:
 
 ```python
 from dcat_ap_hub import Dataset
@@ -239,9 +251,8 @@ ds = Dataset.from_directory("output/<example>/runs/<run>/data")
 ds.process()  # writes data/processed/train.csv and test.csv
 ```
 
-This needs a dcat-ap-hub version that accepts plain `process()` functions. It
-runs generated code on your machine, so only process runs you trust. When the
-dataset is published, its metadata replaces the draft `dcat-metadata.jsonld`; it
-must contain the same processor entry (`rdfs:Resource` with
-`dct:conformsTo: http://example.org/profiles/Processor`, linked via
-`dct:relation`).
+This runs generated code on your machine, so only process runs you trust; the
+pipeline's own check runs it in the isolated container instead. The record
+names the processor by the relative URL `processor.py`, so publishing the record
+next to `processor.py` keeps it valid: dcat-ap-hub resolves the URL against the
+record's own URL.

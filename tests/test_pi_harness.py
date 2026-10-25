@@ -55,7 +55,7 @@ class PiHarnessTests(unittest.TestCase):
                 self.assertEqual("provider-a", request_document["provider_id"])
                 self.assertEqual("model-a", request_document["model_id"])
                 self.assertFalse(request_document["continue_session"])
-                for name in ("parser.py", "train.csv", "test.csv"):
+                for name in ("processor.py", "train.csv", "test.csv"):
                     (request.output_dir / name).write_text("ok\n", encoding="utf-8")
                 session_dir = Path(request_document["session_dir"])
                 session_dir.mkdir(parents=True, exist_ok=True)
@@ -157,7 +157,7 @@ class PiHarnessTests(unittest.TestCase):
             def runner(command, **_kwargs):
                 document = json.loads(Path(command[-1]).read_text(encoding="utf-8"))
                 calls.append(document)
-                names = ("parser.py",) if len(calls) == 1 else ("train.csv", "test.csv")
+                names = ("processor.py",) if len(calls) == 1 else ("train.csv", "test.csv")
                 for name in names:
                     (request.output_dir / name).write_text("ok\n", encoding="utf-8")
                 return SimpleNamespace(
@@ -242,7 +242,7 @@ class PiHarnessTests(unittest.TestCase):
                         stdout=json.dumps(event),
                         stderr="",
                     )
-                for name in ("parser.py", "train.csv", "test.csv"):
+                for name in ("processor.py", "train.csv", "test.csv"):
                     (request.output_dir / name).write_text("ok\n", encoding="utf-8")
                 return SimpleNamespace(
                     returncode=0,

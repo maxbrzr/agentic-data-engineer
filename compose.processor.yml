@@ -1,0 +1,25 @@
+# Runs a packaged dataset folder's processor.py in isolation, the way
+# dcat-ap-hub would, so the pipeline can check that it reproduces the agent's
+# train.csv and test.csv without running generated code on the host.
+name: agentic-data-engineer-processor
+
+services:
+  processor:
+    build:
+      context: .
+      dockerfile: docker/processor/Dockerfile
+    user: "${ADE_UID:-1000}:${ADE_GID:-1000}"
+    network_mode: none
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=1g,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 256
+    volumes:
+      - type: bind
+        source: "${PACKAGE_DIR:?Set PACKAGE_DIR to the packaged dataset folder}"
+        target: /dataset
+    command: ["/dataset"]

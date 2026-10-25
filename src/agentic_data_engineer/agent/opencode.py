@@ -18,7 +18,7 @@ from .provider_env import provider_environment_name
 ClientFactory = Callable[..., Any]
 Sleeper = Callable[[float], None]
 
-REQUIRED_OUTPUTS = ("parser.py", "train.csv", "test.csv")
+REQUIRED_OUTPUTS = ("processor.py", "train.csv", "test.csv")
 TRANSIENT_PROVIDER_MARKERS = (
     "no provider available",
     "rate limit",
@@ -332,7 +332,7 @@ class OpencodeHarness:
             f"{missing}. Resume from the work already completed in this session; "
             "do not restart exploration and do not read complete raw tables with "
             "the read tool. Create the missing artifacts, run the required "
-            "validations, and verify parser.py, train.csv, and test.csv exist "
+            "validations, and verify processor.py, train.csv, and test.csv exist "
             "before finishing."
         )
 

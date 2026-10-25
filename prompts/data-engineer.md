@@ -91,9 +91,9 @@ Determine:
 
 If several interpretations are plausible, select one only when the local evidence clearly supports it and document the alternatives rejected. If no defensible supervised target exists, stop with a clear `ValueError` listing the candidates examined.
 
-## 2. Implement `parser.py`
+## 2. Implement `processor.py`
 
-Create `output_dir/parser.py` with this required public interface:
+Create `output_dir/processor.py` with this required public interface:
 
 ```python
 import pandas as pd
@@ -142,7 +142,7 @@ For non-temporal tables, do not create artificial timestamps or impose a frequen
 
 ## 3. Split before learned preprocessing
 
-Create splitting and export functions in `parser.py`, separate from `parse()`.
+Create splitting and export functions in `processor.py`, separate from `parse()`.
 
 Choose the split strategy from the dataset structure:
 
@@ -201,27 +201,30 @@ Additional requirements:
 
 ### dcat-ap-hub entry point
 
-`parser.py` must also define this module-level function, which the published
+`processor.py` must also define this module-level function, which the published
 dataset uses as its processor (dcat-ap-hub calls it via `Dataset.process()`):
 
 ```python
 from pathlib import Path
 
-def process(input_files: list[Path], output_dir: Path) -> None:
+def process(data_dir: Path, output_dir: Path) -> None:
     """Parse, split, and write train.csv and test.csv to output_dir."""
     ...
 ```
 
-- Derive the dataset folder as the common parent directory of `input_files`, call
-  `parse()` on it, then apply the same split and export logic used for
-  `output_dir/train.csv` and `output_dir/test.csv`. The files it writes must be
-  identical to those exports.
-- `input_files` are only the top-level files of the dataset folder. The folder may
-  also contain `parser.py`, `dcat-metadata.jsonld`, and a `processed/` output
-  folder from earlier runs. Select source files by the specific names or patterns
-  identified during analysis; never read those extra files.
-- Do not import `dcat_ap_hub` or any package beyond those the parser already uses.
-- Hard-coded absolute paths are not allowed anywhere in `parser.py`.
+- `data_dir` is the dataset folder: call `parse()` on it, then apply the same
+  split and export logic used for `output_dir/train.csv` and
+  `output_dir/test.csv`. The files it writes must be identical to those exports.
+- Besides the raw files, possibly in sub-folders extracted from archives, the
+  folder also contains `processor.py`, `dcat-metadata.jsonld`, and the
+  `output_dir` itself (`data_dir/processed/`). Select source files by the specific
+  names or patterns identified during analysis; never read those extra files.
+- `process()` must write exactly `train.csv` and `test.csv`; dcat-ap-hub rejects a
+  processor that does not.
+- Define no class with a `process` method; dcat-ap-hub uses the module-level
+  `process()` function.
+- Do not import `dcat_ap_hub` or any package beyond those the processor already uses.
+- Hard-coded absolute paths are not allowed anywhere in `processor.py`.
 
 ## 4. Run gatekeeper validation
 
@@ -268,10 +271,12 @@ test_deterministic_splits(
 )
 ```
 
-Then verify the dcat-ap-hub entry point: call `process()` with the top-level files
-of the read-only dataset folder and a fresh temporary output directory, and assert
-that the `train.csv` and `test.csv` it writes are byte-identical to
-`output_dir/train.csv` and `output_dir/test.csv`.
+Then verify the dcat-ap-hub entry point: call `process()` with the read-only
+dataset folder and a fresh temporary output directory, and assert that the
+`train.csv` and `test.csv` it writes are byte-identical to `output_dir/train.csv`
+and `output_dir/test.csv`. After your run, the host pipeline runs `process()`
+again in an isolated container on the packaged dataset folder and rejects the run
+unless the outputs are byte-identical.
 
 For a genuinely time-indexed task that requires a regular grid, also use `test_datetimeindex_consistency()` and `test_timestamps()` with the frequency inferred by the processor. Do not force ordinary tabular data into a `DatetimeIndex`.
 
@@ -289,7 +294,7 @@ Report:
 - Any temporal processing, if applicable.
 - Split strategy, seed or boundary, protected groups, and split sizes.
 - Final columns, shapes, target distribution, and validation results.
-- Paths to `parser.py`, `train.csv`, and `test.csv`.
+- Paths to `processor.py`, `train.csv`, and `test.csv`.
 - Remaining assumptions or limitations.
 
 Do not claim success unless those three required files exist, `process()` reproduces the exported splits, and every applicable tabular validation passes.

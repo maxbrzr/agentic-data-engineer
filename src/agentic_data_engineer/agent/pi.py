@@ -25,7 +25,7 @@ from .provider_env import require_provider_environment
 CommandRunner = Callable[..., Any]
 Sleeper = Callable[[float], None]
 
-REQUIRED_OUTPUTS = ("parser.py", "train.csv", "test.csv")
+REQUIRED_OUTPUTS = ("processor.py", "train.csv", "test.csv")
 TRANSIENT_PROVIDER_MARKERS = (
     "no provider available",
     "rate limit",
@@ -494,7 +494,7 @@ class PiHarness:
             f"the host could see these required artifacts in {output_dir}: "
             f"{missing}. Do not restart exploration and do not read complete raw "
             "tables with the read tool. Create the missing artifacts, run the "
-            "required validations, and verify parser.py, train.csv, and test.csv "
+            "required validations, and verify processor.py, train.csv, and test.csv "
             "exist before finishing."
         )
 

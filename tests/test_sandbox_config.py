@@ -24,8 +24,7 @@ class SandboxConfigurationTests(unittest.TestCase):
 
         self.assertIn("ARG OPENCODE_VERSION=1.18.9", dockerfile)
         self.assertIn('"opencode-ai@${OPENCODE_VERSION}"', dockerfile)
-        self.assertIn("pandas==3.0.5", dockerfile)
-        self.assertIn("scikit-learn==1.9.0", dockerfile)
+        self.assertIn("-r /opt/agent-runtime-requirements.txt", dockerfile)
         self.assertNotIn("croissant-baker", dockerfile)
         self.assertIn("USER node", dockerfile)
         self.assertIn(
@@ -41,6 +40,27 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertIn("raw data mount is writable", entrypoint)
         self.assertIn("output mount is not writable", entrypoint)
         self.assertIn("agentic-data-engineer-sandbox.json", entrypoint)
+
+    def test_agents_and_processor_check_share_one_runtime(self):
+        requirements = ROOT / "docker" / "processor" / "requirements.txt"
+        pins = requirements.read_text(encoding="utf-8")
+        self.assertIn("pandas==3.0.5", pins)
+        self.assertIn("scikit-learn==1.9.0", pins)
+        for image in ("opencode", "pi", "processor"):
+            dockerfile = (ROOT / "docker" / image / "Dockerfile").read_text(encoding="utf-8")
+            self.assertIn("COPY docker/processor/requirements.txt", dockerfile, image)
+            self.assertNotIn("pandas==", dockerfile, image)
+
+    def test_processor_check_container_is_isolated(self):
+        compose = (ROOT / "compose.processor.yml").read_text(encoding="utf-8")
+        self.assertIn("network_mode: none", compose)
+        self.assertIn("read_only: true", compose)
+        self.assertIn("- ALL", compose)
+        self.assertIn("no-new-privileges:true", compose)
+        self.assertIn('source: "${PACKAGE_DIR:?', compose)
+        runner = (ROOT / "docker" / "processor" / "run_processor.py").read_text(encoding="utf-8")
+        self.assertIn('output_dir = data_dir / "processed"', runner)
+        self.assertIn("process(data_dir, output_dir)", runner)
 
     def test_compose_enforces_host_filesystem_boundary(self):
         compose = (ROOT / "compose.opencode.yml").read_text(encoding="utf-8")
