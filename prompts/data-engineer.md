@@ -216,8 +216,8 @@ def process(data_dir: Path, output_dir: Path) -> None:
   split and export logic used for `output_dir/train.csv` and
   `output_dir/test.csv`. The files it writes must be identical to those exports.
 - Besides the raw files, possibly in sub-folders extracted from archives, the
-  folder also contains `processor.py`, `dcat-metadata.jsonld`, and the
-  `output_dir` itself (`data_dir/processed/`). Select source files by the specific
+  folder also contains `processor.py`, `dcat-ap-metadata.jsonld`,
+  `dcat-ap-sources.json`, and the `output_dir` itself (`data_dir/processed/`). Select source files by the specific
   names or patterns identified during analysis; never read those extra files.
 - `process()` must write exactly `train.csv` and `test.csv`; dcat-ap-hub rejects a
   processor that does not.

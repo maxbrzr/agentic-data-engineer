@@ -413,11 +413,17 @@ class PipelineArchitectureTests(unittest.TestCase):
             copied = request.output_dir / "data" / "raw.csv"
             self.assertEqual("feature,target\n1,0\n", copied.read_text(encoding="utf-8"))
             source_data = provenance["source_data"]
-            self.assertEqual(str(request.dataset.data_dir), source_data["copied_from"])
+            self.assertEqual(
+                str(request.dataset.data_dir.relative_to(root)), source_data["copied_from"]
+            )
+            self.assertEqual(request.dataset.spec.url, source_data["record_url"])
             self.assertEqual(
                 {"raw.csv": hashlib.sha256(copied.read_bytes()).hexdigest()},
                 source_data["files"],
             )
+            # The fake retriever is not the hub: no manifest, so no file origin.
+            self.assertIsNone(source_data["sources_manifest"])
+            self.assertEqual(["raw.csv"], source_data["unrecorded"])
             package = source_data["dataset_package"]
             self.assertEqual("data/processor.py", package["processor"]["path"])
             self.assertEqual(
@@ -425,12 +431,18 @@ class PipelineArchitectureTests(unittest.TestCase):
                 (request.output_dir / "data" / "processor.py").read_bytes(),
             )
             draft = json.loads(
-                (request.output_dir / "data" / "dcat-metadata.jsonld").read_text(
+                (request.output_dir / "data" / "dcat-ap-metadata.jsonld").read_text(
                     encoding="utf-8"
                 )
             )
             dataset_node, processor_node = draft["@graph"]
             self.assertEqual("dcat:Dataset", dataset_node["@type"])
+            self.assertEqual("#dataset", dataset_node["@id"])
+            self.assertEqual(
+                {"@id": request.dataset.spec.url}, dataset_node["prov:wasDerivedFrom"]
+            )
+            self.assertTrue(dataset_node["dct:title"].endswith(" (AI-ready)"))
+            self.assertEqual("#processor", processor_node["@id"])
             self.assertEqual(
                 [{"@id": processor_node["@id"]}], dataset_node["dct:relation"]
             )

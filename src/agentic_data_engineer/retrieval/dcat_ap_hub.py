@@ -3,6 +3,7 @@ from pathlib import Path
 from typing import Any
 
 from dcat_ap_hub import Dataset
+from dcat_ap_hub.metadata.constants import METADATA_FILENAME, SOURCES_MANIFEST
 
 from ..contracts import DatasetSpec, RetrievedDataset
 from .catalog import validate_dataset_key
@@ -72,8 +73,9 @@ class DcatApHubRetriever:
                 key=str,
             )
         )
+        # The hub's sidecars are not data and must not mask failed downloads.
         downloaded_assets = tuple(
-            path for path in files if path.name != "dcat-metadata.jsonld"
+            path for path in files if path.name not in {METADATA_FILENAME, SOURCES_MANIFEST}
         )
         if downloaded_assets and all(
             path.suffix.lower() in {".htm", ".html"}

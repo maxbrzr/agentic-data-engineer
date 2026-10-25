@@ -6,6 +6,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 from croissant_baker.metadata_generator import MetadataGenerator
+from dcat_ap_hub.metadata.constants import METADATA_FILENAME
 
 from ..contracts import (
     MetadataGenerationResult,
@@ -97,10 +98,10 @@ def _creator_name(
 
 
 def _load_dcat_metadata(dataset: RetrievedDataset) -> dict[str, Any]:
-    metadata_paths = sorted(dataset.data_dir.rglob("dcat-metadata.jsonld"))
+    metadata_paths = sorted(dataset.data_dir.rglob(METADATA_FILENAME))
     if not metadata_paths:
         raise ValueError(
-            f"No dcat-metadata.jsonld found under {dataset.data_dir}; "
+            f"No {METADATA_FILENAME} found under {dataset.data_dir}; "
             "Croissant metadata must not be generated from invented defaults."
         )
     if len(metadata_paths) > 1:

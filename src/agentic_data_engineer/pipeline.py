@@ -20,11 +20,17 @@ from .contracts import (
 )
 from .retrieval import get_example, list_examples
 
-from dcat_ap_hub import add_processor
-from dcat_ap_hub.metadata.constants import PROCESSOR_FILENAME, SPLIT_FILES
+from dcat_ap_hub import add_processor, ai_ready_record
+from dcat_ap_hub.metadata.constants import (
+    METADATA_FILENAME,
+    PROCESSOR_FILENAME,
+    SOURCES_MANIFEST,
+    SPLIT_FILES,
+)
+from dcat_ap_hub.metadata.transfer import read_sources_manifest
 
 SOURCE_DATA_DIR_NAME = "data"
-DATASET_METADATA_NAME = "dcat-metadata.jsonld"
+DATASET_METADATA_NAME = METADATA_FILENAME
 # Artifacts every successful agent run must leave in its output directory.
 REQUIRED_AGENT_OUTPUTS = (PROCESSOR_FILENAME, *SPLIT_FILES)
 
@@ -81,7 +87,12 @@ class DataEngineeringPipeline:
         metadata_result = self.metadata_generator.generate(retrieved, output_dir)
         # Copied only after the agent and metadata steps, so the agent never
         # gets a writable copy of the raw data.
-        source_data = self.copy_source_data(retrieved.data_dir, output_dir)
+        source_data = self.copy_source_data(
+            retrieved.data_dir,
+            output_dir,
+            record_url=retrieved.spec.url,
+            workspace_root=self.config.workspace_root,
+        )
         package = self.build_dataset_package(output_dir, retrieved.spec)
         # Fails the run unless dcat-ap-hub would reproduce the exported split.
         check = self.processor_checker.check(
@@ -187,18 +198,58 @@ class DataEngineeringPipeline:
         )
 
     @classmethod
-    def copy_source_data(cls, data_dir: Path, output_dir: Path) -> dict:
-        """Copy the original dataset into <output_dir>/data and hash each file."""
+    def copy_source_data(
+        cls,
+        data_dir: Path,
+        output_dir: Path,
+        *,
+        record_url: str | None = None,
+        workspace_root: Path | None = None,
+    ) -> dict:
+        """
+        Copy the original dataset into <output_dir>/data and record its origin.
+
+        Besides a hash per file, this records the catalog record and, from the
+        hub's sources manifest, the URL every file was downloaded from. Files
+        the manifest does not account for (placed by hand, or a folder not
+        downloaded by the hub) are listed as ``unrecorded``; downloads that
+        failed or returned an HTML page as ``failed_sources``.
+        """
         target = output_dir / SOURCE_DATA_DIR_NAME
         shutil.copytree(data_dir, target, dirs_exist_ok=True)
+        files = {
+            str(file.relative_to(target)): cls._sha256(file)
+            for file in sorted(target.rglob("*"))
+            if file.is_file()
+        }
+        manifest = read_sources_manifest(target)
+        sidecars = {DATASET_METADATA_NAME, SOURCES_MANIFEST}
+        origins: dict[str, str] = {}
+        failed: list[dict] = []
+        if manifest is not None:
+            sources = manifest.get("sources", [])
+            for name, entry in manifest.get("files", {}).items():
+                source = sources[entry["source"]]
+                if name in files and entry.get("sha256") == files[name]:
+                    origins[name] = source["url"]
+            failed = [
+                {key: source.get(key) for key in ("title", "url", "status", "error") if source.get(key)}
+                for source in sources
+                if source.get("status") != "downloaded"
+            ]
+        try:
+            copied_from = str(data_dir.resolve().relative_to(workspace_root.resolve())) if workspace_root else str(data_dir)
+        except ValueError:
+            copied_from = str(data_dir)
         return {
             "path": SOURCE_DATA_DIR_NAME,
-            "copied_from": str(data_dir),
-            "files": {
-                str(file.relative_to(target)): cls._sha256(file)
-                for file in sorted(target.rglob("*"))
-                if file.is_file()
-            },
+            "record_url": record_url,
+            "copied_from": copied_from,
+            "sources_manifest": SOURCES_MANIFEST if manifest is not None else None,
+            "files": files,
+            "origins": origins,
+            "unrecorded": sorted(name for name in files if name not in origins and name not in sidecars),
+            "failed_sources": failed,
         }
 
     @classmethod
@@ -206,11 +257,13 @@ class DataEngineeringPipeline:
         """
         Make <output_dir>/data a dcat-ap-hub dataset folder.
 
-        Adds a copy of processor.py and a draft dcat-metadata.jsonld that
-        declares it as the dataset's processor (built by dcat-ap-hub's
-        ``add_processor``), so ``Dataset.from_directory(<run>/data).process()``
-        works before the data is published. The processor URL is relative: it
-        stays valid when the folder is published as is.
+        Adds a copy of processor.py and a draft dcat-ap-metadata.jsonld for the
+        AI-ready dataset, built with dcat-ap-hub: ``ai_ready_record`` gives it
+        its own id and ``prov:wasDerivedFrom`` the raw dataset, and
+        ``add_processor`` declares the processor. So
+        ``Dataset.from_directory(<run>/data).process()`` works before anything
+        is published. The id and processor URL are relative: they stay valid
+        when the folder is published as is.
         """
         data_dir = output_dir / SOURCE_DATA_DIR_NAME
         processor = data_dir / PROCESSOR_FILENAME
@@ -220,7 +273,13 @@ class DataEngineeringPipeline:
             document = json.loads(metadata_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             document = {}
-        document = add_processor(document, dataset_id=spec.url, title=spec.title)
+        try:
+            document = ai_ready_record(document, raw_id=spec.url)
+        except ValueError:
+            # The raw record had no dataset node; derive from the catalog URL.
+            raw = {"@graph": [{"@id": spec.url, "@type": "dcat:Dataset", "dct:title": spec.title}]}
+            document = ai_ready_record(raw)
+        document = add_processor(document)
         metadata_path.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
         return {
             "processor": {

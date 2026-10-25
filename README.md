@@ -227,21 +227,28 @@ output/<example>/runs/<timestamp>__<provider>__<model>__<run-id>/
 ├── data/                  # dcat-ap-hub dataset folder, added after the agent run
 │   ├── <original files>
 │   ├── processor.py       # copy of the generated processor
-│   └── dcat-metadata.jsonld  # draft: original metadata + processor entry
+│   └── dcat-ap-metadata.jsonld  # draft: original metadata + processor entry
 ├── agent.log              # live agent log, written during the run
 └── agent_transcript.md    # full session transcript, written at the end
 ```
 
 `provenance.json` records the harness, provider, model, run IDs, and artifact
-hashes, a hash for every file in `data/`, and the result and runtime of the
-processor check. The raw data is copied only after the agent finishes, so the
+hashes, and the result and runtime of the processor check. Under
+`source_data` it records where the raw data came from: the catalog record
+(`record_url`), the folder it was copied from (relative to the workspace), a
+hash for every file, and, from dcat-ap-hub's `dcat-ap-sources.json`, the URL each
+file was downloaded from (`origins`). Files the hub did not download, such as
+ones placed by hand in a configured example folder, are listed as `unrecorded`;
+downloads that failed or returned an HTML page as `failed_sources`. The raw data is copied only after the agent finishes, so the
 agent never gets a writable copy. Files from failed runs remain available for
 diagnosis.
 
 `processor.py` defines a module-level `process(data_dir, output_dir)` function,
-and `data/dcat-metadata.jsonld` is the original record plus an `rdfs:Resource`
-for it with `dct:conformsTo` `https://data.hammerhai.eu/vocab/Processor`, linked
-via `dct:relation` (written by dcat-ap-hub's `add_processor`). So each run's
+and `data/dcat-ap-metadata.jsonld` is the draft record of the AI-ready dataset,
+built with dcat-ap-hub: the raw record's distributions, its own id `#dataset`,
+`prov:wasDerivedFrom` the raw dataset, the title suffix " (AI-ready)", and an
+`rdfs:Resource` for `processor.py` with `dct:conformsTo`
+`https://data.hammerhai.eu/vocab/Processor`, linked via `dct:relation`. So each run's
 `data/` folder is a complete dcat-ap-hub dataset before anything is uploaded:
 
 ```python

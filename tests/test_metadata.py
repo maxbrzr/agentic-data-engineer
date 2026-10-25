@@ -46,7 +46,7 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
                     },
                 ]
             }
-            (data_dir / "dcat-metadata.jsonld").write_text(
+            (data_dir / "dcat-ap-metadata.jsonld").write_text(
                 json.dumps(metadata),
                 encoding="utf-8",
             )
@@ -144,7 +144,7 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
                     },
                 ]
             }
-            (data_dir / "dcat-metadata.jsonld").write_text(
+            (data_dir / "dcat-ap-metadata.jsonld").write_text(
                 json.dumps(metadata),
                 encoding="utf-8",
             )
@@ -177,7 +177,7 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
             root = Path(temp_dir).resolve()
             data_dir = root / "data"
             data_dir.mkdir()
-            (data_dir / "dcat-metadata.jsonld").write_text(
+            (data_dir / "dcat-ap-metadata.jsonld").write_text(
                 json.dumps(
                     {
                         "@graph": [
@@ -207,7 +207,7 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
     def test_preflight_allows_missing_publication_date(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             data_dir = Path(temp_dir).resolve()
-            (data_dir / "dcat-metadata.jsonld").write_text(
+            (data_dir / "dcat-ap-metadata.jsonld").write_text(
                 json.dumps(
                     {
                         "@graph": [

@@ -125,7 +125,9 @@ class HubContractTests(unittest.TestCase):
         (output_dir / "processor.py").write_text(PROCESSOR)
         apply_processor_logic(output_dir / "processor.py", retrieved.data_dir, output_dir)
         DataEngineeringPipeline._require_agent_outputs(output_dir, "fake-run")
-        DataEngineeringPipeline.copy_source_data(retrieved.data_dir, output_dir)
+        self.source_data = DataEngineeringPipeline.copy_source_data(
+            retrieved.data_dir, output_dir, record_url=spec.url, workspace_root=self.root
+        )
         DataEngineeringPipeline.build_dataset_package(output_dir, spec)
         return retrieved, output_dir
 
@@ -137,7 +139,7 @@ class HubContractTests(unittest.TestCase):
 
     def test_draft_record_declares_processor_with_hub_profile(self):
         _, output_dir = self._run_fake_agent()
-        draft = json.loads((output_dir / "data" / "dcat-metadata.jsonld").read_text())
+        draft = json.loads((output_dir / "data" / "dcat-ap-metadata.jsonld").read_text())
         [processor] = [n for n in draft["@graph"] if n.get("@id", "").endswith("#processor")]
         self.assertEqual({"@id": PROCESSOR_PROFILE_URI}, processor["dct:conformsTo"])
         self.assertEqual("processor.py", processor["dcat:downloadURL"])
@@ -148,7 +150,7 @@ class HubContractTests(unittest.TestCase):
         self.assertEqual(retrieved.metadata_title, "Pump: Sensor/Data")
         csvs = [path for path in retrieved.files if path.suffix == ".csv"]
         self.assertEqual(len(csvs), 2)
-        self.assertTrue((retrieved.data_dir / "dcat-metadata.jsonld").is_file())
+        self.assertTrue((retrieved.data_dir / "dcat-ap-metadata.jsonld").is_file())
 
     def test_run_package_processes_locally(self):
         _, output_dir = self._run_fake_agent()
@@ -158,16 +160,33 @@ class HubContractTests(unittest.TestCase):
 
         self.assertReproduces(ds.processed_path, output_dir)
 
+    def test_provenance_traces_every_raw_file_to_its_url(self):
+        self._run_fake_agent()
+        source = self.source_data
+
+        self.assertEqual(self.record_url, source["record_url"])
+        self.assertTrue(source["copied_from"].startswith("data/"))
+        self.assertEqual("dcat-ap-sources.json", source["sources_manifest"])
+        self.assertEqual(
+            {f"{self.base}/portal/part1.csv", f"{self.base}/portal/part2.csv"},
+            {url for name, url in source["origins"].items() if name.endswith(".csv")},
+        )
+        self.assertEqual([], source["unrecorded"])
+        self.assertEqual([], source["failed_sources"])
+
     def test_published_package_processes_from_url(self):
         _, output_dir = self._run_fake_agent()
         # Publishing = hosting the draft record next to processor.py: its
         # relative processor URL resolves against the record's URL.
         hosted = self.remote / "ai-ready"
         hosted.mkdir()
-        for name in ("processor.py", "dcat-metadata.jsonld"):
+        for name in ("processor.py", "dcat-ap-metadata.jsonld"):
             (hosted / name).write_bytes((output_dir / "data" / name).read_bytes())
 
-        ds = Dataset.from_url(f"{self.base}/ai-ready/dcat-metadata.jsonld")
+        ds = Dataset.from_url(f"{self.base}/ai-ready/dcat-ap-metadata.jsonld")
+        # The AI-ready record is its own dataset, derived from the raw one.
+        self.assertEqual("Pump: Sensor/Data (AI-ready)", ds.title)
+        self.assertEqual(["https://piveau.io/set/data/pump-sensor-data"], ds._meta.derived_from)
         files = ds.download(data_dir=self.root / "consumer", verbose=False)
         self.assertIn("processor.py", {f.path.name for f in files})
         ds.process(verbose=False)
