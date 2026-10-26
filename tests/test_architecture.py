@@ -20,6 +20,7 @@ from agentic_data_engineer.contracts import (
     RetrievedDataset,
 )
 from agentic_data_engineer.pipeline import DataEngineeringPipeline
+from agentic_data_engineer.retrieval.catalog import CATALOG_URL
 from agentic_data_engineer.retrieval import (
     DcatApHubRetriever,
     EXAMPLE_DATASETS,
@@ -149,18 +150,18 @@ class CatalogAndRetrievalTests(unittest.TestCase):
         self.assertEqual(set(EXAMPLE_DATASETS), {example.key for example in examples})
         self.assertEqual(examples[0], get_example(examples[0].key))
         self.assertEqual(
-            "Predictive Maintenance Engine Data",
-            get_example("predictive-maintenance-engine-data").local_dir_name,
+            f"{CATALOG_URL}/huggingface/rynaxzion-predictive-maintenance-engine-data",
+            get_example("predictive-maintenance-engine-data").url,
         )
 
-    def test_examples_are_local_folders_with_a_record(self):
-        # data/ is not versioned; check the folders only where they exist.
-        data_root = Path(__file__).resolve().parents[1] / "data"
+    def test_examples_are_records_on_the_catalog_server(self):
+        portals = {"darus", "huggingface", "kaggle", "zenodo"}
         for example in list_examples():
-            self.assertTrue(example.local_dir_name, example.key)
-            folder = data_root / example.local_dir_name
-            if data_root.is_dir():
-                self.assertTrue((folder / "dcat-ap-metadata.jsonld").is_file(), folder)
+            # Downloaded by dcat-ap-hub, not read from a hand-made folder.
+            self.assertIsNone(example.local_dir_name, example.key)
+            portal, slug = example.url.removeprefix(f"{CATALOG_URL}/").split("/")
+            self.assertIn(portal, portals, example.key)
+            self.assertRegex(slug, r"^[a-z0-9-]+$", example.key)
 
     def test_unknown_example_fails(self):
         with self.assertRaisesRegex(KeyError, "Unknown example"):
@@ -487,6 +488,21 @@ class PipelineArchitectureTests(unittest.TestCase):
                 {"checker": "fake-processor-check", "reproduced": ["test.csv", "train.csv"], "runtime": "fake"},
                 package["processor_check"],
             )
+
+    def test_scratch_files_move_out_of_the_run_top_level(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            output_dir = Path(temp_dir)
+            for name in ("processor.py", "train.csv", "test.csv", "agent.log", "_validate.py", "notes.md"):
+                (output_dir / name).write_text("x", encoding="utf-8")
+            (output_dir / ".pi-sessions").mkdir()
+
+            moved = DataEngineeringPipeline.move_scratch_files(output_dir)
+
+            self.assertEqual(["_validate.py", "notes.md"], moved)
+            self.assertTrue((output_dir / "scratch" / "_validate.py").is_file())
+            self.assertTrue((output_dir / "processor.py").is_file())
+            self.assertTrue((output_dir / ".pi-sessions").is_dir())
+            self.assertEqual([], DataEngineeringPipeline.move_scratch_files(output_dir))
 
     def test_pipeline_runs_url_derived_spec(self):
         retriever = FakeRetriever()

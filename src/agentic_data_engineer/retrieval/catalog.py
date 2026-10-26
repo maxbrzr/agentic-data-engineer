@@ -1,139 +1,91 @@
 import hashlib
+import os
 import re
 from types import MappingProxyType
 from urllib.parse import urlparse
 
 from ..contracts import DatasetSpec
 
-# Examples backed by folders already downloaded under data/. The URL is the
-# dataset's record on data.hammerhai.eu; Zenodo records are not published there
-# yet, so those use the DOI. Local examples never fetch their URL.
-_EXAMPLE_DATASETS = {
-    "comprehensive-multi-sheet-safety-simulation": DatasetSpec(
-        key="comprehensive-multi-sheet-safety-simulation",
-        title=(
+# Records served by the harvesting scripts (`uv run harvest serve` in
+# harvesting-scripts) from the repaired catalogs, until they are on
+# data.hammerhai.eu. Set ADE_CATALOG_URL to use another server. dcat-ap-hub
+# downloads each example into data/<key>/ on its first run.
+CATALOG_URL = os.environ.get("ADE_CATALOG_URL", "http://127.0.0.1:8000").rstrip("/")
+
+_EXAMPLE_PATHS = {
+    "comprehensive-multi-sheet-safety-simulation": (
+        (
             "Comprehensive Multi-Sheet Simulation and Diagnostic Dataset for "
             "AI-Driven Safety Analysis in Complex Engineering Systems"
         ),
-        url="https://doi.org/10.5281/zenodo.18204207",
-        local_dir_name=(
-            "Comprehensive Multi-Sheet Simulation and Diagnostic Dataset for "
-            "AI-Driven Safety Analysis in Complex Engineering Systems"
-        ),
+        "zenodo/10-5281-zenodo-18204207",
     ),
-    "part-separator-computation-time": DatasetSpec(
-        key="part-separator-computation-time",
-        title=(
+    "part-separator-computation-time": (
+        (
             "Computation time measurements of the part separator submodel in a "
             "real-time co-simulation"
         ),
-        url="https://data.hammerhai.eu/en/dataset/doi-10-18419-darus-6472",
-        local_dir_name=(
-            "Computation time measurements of the part separator submodel in a "
-            "real-time co-simulation"
-        ),
+        "darus/10-18419-darus-6472",
     ),
-    "edge-ai-industrial-robot-motion": DatasetSpec(
-        key="edge-ai-industrial-robot-motion",
-        title="Edge-AI Industrial Robot Motion Dataset",
-        url="https://data.hammerhai.eu/en/dataset/7779224",
-        local_dir_name="Edge-AI Industrial Robot Motion Dataset",
+    "edge-ai-industrial-robot-motion": (
+        "Edge-AI Industrial Robot Motion Dataset",
+        "kaggle/ziya07-edge-ai-industrial-robot-motion-dataset",
     ),
-    "industrial-digital-twin-1-year": DatasetSpec(
-        key="industrial-digital-twin-1-year",
-        title="Industrial Digital Twin Dataset 1 Year",
-        url="https://data.hammerhai.eu/en/dataset/9627351",
-        local_dir_name="Industrial Digital Twin Dataset 1 Year",
+    "industrial-digital-twin-1-year": (
+        "Industrial Digital Twin Dataset 1 Year",
+        "kaggle/aiwithcagri-industrial-digital-twin-dataset-1-year",
     ),
-    "industrial-equipment-sensor-anomaly": DatasetSpec(
-        key="industrial-equipment-sensor-anomaly",
-        title="Industrial Equipment Sensor Anomaly Data",
-        url=(
-            "https://data.hammerhai.eu/en/dataset/"
-            "petsteb-industrial-sensor-anomaly-data"
-        ),
-        local_dir_name="Industrial Equipment Sensor Anomaly Data",
+    "industrial-equipment-sensor-anomaly": (
+        "Industrial Equipment Sensor Anomaly Data",
+        "huggingface/petsteb-industrial-sensor-anomaly-data",
     ),
-    "industrial-machine-predictive-maintenance": DatasetSpec(
-        key="industrial-machine-predictive-maintenance",
-        title="Industrial Machine Predictive Maintenance (syn)",
-        url=(
-            "https://data.hammerhai.eu/en/dataset/"
-            "tatheerabbas-industrial-machine-predictive-maintenance"
-        ),
-        local_dir_name="Industrial Machine Predictive Maintenance (syn)",
+    "industrial-machine-predictive-maintenance": (
+        "Industrial Machine Predictive Maintenance (syn)",
+        "kaggle/tatheerabbas-industrial-machine-predictive-maintenance",
     ),
-    "industrial-screw-driving": DatasetSpec(
-        key="industrial-screw-driving",
-        title=(
+    "industrial-screw-driving": (
+        (
             "Industrial screw driving dataset collection: Time series data for "
             "process monitoring and anomaly detection"
         ),
-        url="https://doi.org/10.5281/zenodo.16031381",
-        local_dir_name=(
-            "Industrial screw driving dataset collection Time series data for "
-            "process monitoring and anomaly detection"
+        "zenodo/10-5281-zenodo-16031381",
+    ),
+    "industrial-smart-factory-automation-2026": (
+        "Industrial Smart Factory Automation Dataset 2026",
+        (
+            "kaggle/rauffauzanrambe-industrial-smart-factory-automation-dataset-2026"
         ),
     ),
-    "industrial-smart-factory-automation-2026": DatasetSpec(
-        key="industrial-smart-factory-automation-2026",
-        title="Industrial Smart Factory Automation Dataset 2026",
-        url=(
-            "https://data.hammerhai.eu/en/dataset/"
-            "rauffauzanrambe-industrial-smart-factory-automation-dataset-2026"
-        ),
-        local_dir_name="Industrial Smart Factory Automation Dataset 2026",
+    "imaks-knowledge-extraction": (
+        "iMAKS (industrial ModulAr Knowledge extraction Synthetic dataset)",
+        "zenodo/10-5281-zenodo-20075430",
     ),
-    "imaks-knowledge-extraction": DatasetSpec(
-        key="imaks-knowledge-extraction",
-        title="iMAKS (industrial ModulAr Knowledge extraction Synthetic dataset)",
-        url="https://doi.org/10.5281/zenodo.20075430",
-        local_dir_name=(
-            "iMAKS (industrial ModulAr Knowledge extraction Synthetic dataset)"
+    "machine-failure": (
+        "Machine Failure Dataset",
+        "kaggle/sumit913-machine-failure-dataset",
+    ),
+    "predictive-maintenance-10k-synthetic-sensors": (
+        "Predictive Maintenance: 10k Synthetic Sensors",
+        (
+            "kaggle/fernandopipaalves-predictive-maintenance-10k-synthetic-sensors"
         ),
     ),
-    "machine-failure": DatasetSpec(
-        key="machine-failure",
-        title="Machine Failure Dataset",
-        url="https://data.hammerhai.eu/en/dataset/sumit913-machine-failure-dataset",
-        local_dir_name="Machine Failure Dataset",
+    "predictive-maintenance-engine-data": (
+        "Predictive Maintenance Engine Data",
+        "huggingface/rynaxzion-predictive-maintenance-engine-data",
     ),
-    "predictive-maintenance-10k-synthetic-sensors": DatasetSpec(
-        key="predictive-maintenance-10k-synthetic-sensors",
-        title="Predictive Maintenance: 10k Synthetic Sensors",
-        url=(
-            "https://data.hammerhai.eu/en/dataset/"
-            "fernandopipaalves-predictive-maintenance-10k-synthetic-sensors"
-        ),
-        local_dir_name="Predictive Maintenance 10k Synthetic Sensors",
-    ),
-    "predictive-maintenance-engine-data": DatasetSpec(
-        key="predictive-maintenance-engine-data",
-        title="Predictive Maintenance Engine Data",
-        url=(
-            "https://data.hammerhai.eu/en/dataset/"
-            "rynaxzion-predictive-maintenance-engine-data"
-        ),
-        local_dir_name="Predictive Maintenance Engine Data",
-    ),
-    "rt-fdd-pick-and-place-electric-furnace": DatasetSpec(
-        key="rt-fdd-pick-and-place-electric-furnace",
-        title=(
+    "rt-fdd-pick-and-place-electric-furnace": (
+        (
             "RT-FDD Datasets: Pick-and-Place and Electric Furnace Benchmarks "
             "for Real-Time Fault Detection and Diagnosis"
         ),
-        url="https://doi.org/10.5281/zenodo.20576461",
-        local_dir_name=(
-            "RT-FDD Datasets Pick-and-Place and Electric Furnace Benchmarks "
-            "for Real-Time Fault Detection and Diagnosis"
-        ),
+        "zenodo/10-5281-zenodo-20576461",
     ),
-    "time-series-data": DatasetSpec(
-        key="time-series-data",
-        title="Time Series Data",
-        url="https://data.hammerhai.eu/en/dataset/deeeja-time-series-data",
-        local_dir_name="Time Series Data",
-    ),
+}
+
+_EXAMPLE_DATASETS = {
+    key: DatasetSpec(key=key, title=title, url=f"{CATALOG_URL}/{path}")
+    for key, (title, path) in _EXAMPLE_PATHS.items()
 }
 
 EXAMPLE_DATASETS = MappingProxyType(_EXAMPLE_DATASETS)

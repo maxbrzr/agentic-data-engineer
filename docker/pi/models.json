@@ -1,5 +1,33 @@
 {
   "providers": {
+    "blablador": {
+      "baseUrl": "https://api.blablador.fz-juelich.de/v1",
+      "api": "openai-completions",
+      "apiKey": "$BLABLADOR_API_KEY",
+      "authHeader": true,
+      "compat": {
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": false
+      },
+      "models": [
+        {
+          "id": "alias-code",
+          "name": "Blablador code (Qwen3.8 27B, 262k context)"
+        },
+        {
+          "id": "alias-fast",
+          "name": "Blablador fast (GPT-OSS 120B, 131k context)"
+        },
+        {
+          "id": "alias-large",
+          "name": "Blablador large (Qwen3.8 Flash Next)"
+        },
+        {
+          "id": "alias-huge",
+          "name": "Blablador huge (MiniMax M2.7, slow)"
+        }
+      ]
+    },
     "gwdg": {
       "baseUrl": "https://chat-ai.academiccloud.de/v1",
       "api": "openai-completions",

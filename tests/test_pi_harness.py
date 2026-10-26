@@ -410,3 +410,22 @@ class PiHarnessTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PiDataMountTests(unittest.TestCase):
+    def test_mounts_the_top_level_folder_of_a_hub_download(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir).resolve()
+            # dcat-ap-hub layout: data/<key>/<title>/
+            nested = root / "data" / "machine-failure" / "Machine Failure Dataset"
+            nested.mkdir(parents=True)
+            # A stale folder named like the title must not be mounted instead.
+            (root / "data" / "Machine Failure Dataset").mkdir()
+            harness = PiHarness(PiSettings(project_root=root))
+
+            self.assertEqual("machine-failure", harness._mounted_data_dir_name(nested))
+            self.assertEqual(
+                "machine-failure", harness._mounted_data_dir_name(root / "data" / "machine-failure")
+            )
+            with self.assertRaisesRegex(ValueError, "not inside"):
+                harness._mounted_data_dir_name(root / "elsewhere")

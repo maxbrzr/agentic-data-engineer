@@ -39,12 +39,22 @@ uv run agentic-data-engineer --harness pi \
   --provider kit
 ```
 
-Every example is a dataset already downloaded under `data/<folder>/` (14 from
-Kaggle, Hugging Face, Zenodo, and DaRUS, listed by `--list-examples`); runs reuse
-those files and download nothing. `data/` is not versioned, so on a new machine
-place the folders there first, e.g. by downloading the records with
-dcat-ap-hub. The example URL is the dataset's record on data.hammerhai.eu, or
-its DOI for Zenodo datasets, which are not published there yet.
+The examples are 13 datasets from Kaggle, Hugging Face, Zenodo, and DaRUS
+(`--list-examples`). Their records come from the harvesting scripts' local
+catalog server, which serves the repaired catalogs until they are uploaded to
+data.hammerhai.eu. Start it first, in `harvesting-scripts`:
+
+```bash
+uv run harvest serve --port 8000
+```
+
+dcat-ap-hub then downloads each example from its source portal into
+`data/<key>/` on its first run and reuses it afterwards. Set `ADE_CATALOG_URL`
+to use another server.
+
+Each dataset is downloaded and checked before the agent sandbox starts; a
+dataset the pipeline cannot use, such as one whose record has no license,
+fails with a one-line error, and with `--all` the remaining datasets still run.
 
 Run an arbitrary DCAT-AP dataset URL:
 
@@ -59,8 +69,8 @@ The URL must be absolute and use HTTP or HTTPS. The pipeline derives a stable
 to a dataset supported by `dcat-ap-hub`, and its downloaded metadata must
 contain the fields required for Croissant generation.
 
-OpenCode is selected automatically. Both harnesses default to
-`kit/kit.glm-5.3-flash` (requires `KIT_TOOLBOX_API_KEY`). The CLI builds the container,
+Pi is selected by default (`--harness opencode` switches). Both harnesses default to
+`kit/kit.deepseek-v4-flash` (requires `KIT_TOOLBOX_API_KEY`). The CLI builds the container,
 mounts the selected dataset, and checks the sandbox automatically. Diagnostic
 commands are available through `./scripts/opencode`.
 
@@ -129,18 +139,51 @@ uv run agentic-data-engineer \
   --model kit.glm-5.3-flash
 ```
 
-`kit.glm-5.3-flash` is selected by default when `--provider kit` is used
-without an explicit `--model`.
+`kit.deepseek-v4-flash` is selected by default when `--provider kit` is used
+without an explicit `--model`. `kit.glm-5.3-flash` answers too slowly for
+long agent sessions: its requests regularly exceed the 5-minute request timeout.
 
 KIT changes the available models over time. Check the SCC model table if a
 configured model ID stops working; the older ZML model overview is no longer
 maintained.
 
+## Use Helmholtz Blablador
+
+[Blablador](https://sdlaml.pages.jsc.fz-juelich.de/ai/guides/blablador_api_access/)
+is the Helmholtz LLM service at Jülich. Create a personal access token with the
+`read_user` scope on [Helmholtz Codebase](https://codebase.helmholtz.cloud/-/user_settings/personal_access_tokens)
+(log in with your university account; tokens last at most one year) and add it
+to `.env`:
+
+```dotenv
+BLABLADOR_API_KEY=your-token
+```
+
+The catalog lists Blablador's stable aliases, which keep working when the
+models behind them change:
+
+- `alias-code` (default): Qwen3.8 27B, 262k context, trained for code
+- `alias-fast`: GPT-OSS 120B, high throughput
+- `alias-large`: Qwen3.8 Flash Next, balance of accuracy and speed
+- `alias-huge`: MiniMax M2.7, best quality but slow and the strictest rate limit
+
+```bash
+uv run agentic-data-engineer \
+  --example machine-failure \
+  --provider blablador \
+  --model alias-code
+```
+
+Experimental aliases (e.g. `alias-deepseek-v4-flash-0731`) come and go without
+notice and are left out; `scripts/sync-models --check-live` lists them. External
+users are rate-limited per alias (e.g. 40 requests per minute for `alias-code`);
+throttled requests get HTTP 429.
+
 ## Update provider models
 
 Each provider is defined in one file under
 [`src/agentic_data_engineer/providers/`](src/agentic_data_engineer/providers/):
-`gwdg.json`, `kit.json`, and `opencode.json`. Each file holds the endpoint, the
+`blablador.json`, `gwdg.json`, `kit.json`, and `opencode.json`. Each file holds the endpoint, the
 API-key variable, the supported harnesses, the default model, the model list,
 and `ignore`: model-ID prefixes deliberately left out, such as external or
 non-chat models. The CLI choices, `--list-models`, and both Docker harness

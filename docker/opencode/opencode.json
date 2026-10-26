@@ -1,13 +1,36 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "model": "kit/kit.glm-5.3-flash",
-  "small_model": "kit/kit.glm-5.3-flash",
+  "model": "kit/kit.deepseek-v4-flash",
+  "small_model": "kit/kit.deepseek-v4-flash",
   "enabled_providers": [
+    "blablador",
     "gwdg",
     "kit",
     "opencode"
   ],
   "provider": {
+    "blablador": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Helmholtz Blablador",
+      "options": {
+        "baseURL": "https://api.blablador.fz-juelich.de/v1",
+        "apiKey": "{env:BLABLADOR_API_KEY}"
+      },
+      "models": {
+        "alias-code": {
+          "name": "Blablador code (Qwen3.8 27B, 262k context)"
+        },
+        "alias-fast": {
+          "name": "Blablador fast (GPT-OSS 120B, 131k context)"
+        },
+        "alias-large": {
+          "name": "Blablador large (Qwen3.8 Flash Next)"
+        },
+        "alias-huge": {
+          "name": "Blablador huge (MiniMax M2.7, slow)"
+        }
+      }
+    },
     "gwdg": {
       "npm": "@ai-sdk/openai-compatible",
       "name": "GWDG SAIA",

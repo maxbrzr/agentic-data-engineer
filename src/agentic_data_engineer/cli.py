@@ -1,5 +1,6 @@
 import argparse
 import os
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -153,7 +154,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--pi-stall-timeout",
         type=float,
-        default=float(os.getenv("PI_STALL_TIMEOUT_SECONDS", "60")),
+        default=float(os.getenv("PI_STALL_TIMEOUT_SECONDS", "300")),
         help="Abort and retry when Pi emits no output for this many seconds.",
     )
     parser.add_argument(
@@ -298,20 +299,32 @@ def main(argv: Sequence[str] | None = None) -> int:
         config=config,
     )
 
+    failed: list[str] = []
     for spec in specs:
-        if sandbox_manager is not None:
-            sandbox_manager.ensure(
-                spec.key,
-                data_dir_name=spec.local_dir_name,
-                required_provider=model.provider_id,
-            )
-        result = pipeline.run_spec(spec)
+        try:
+            # Download and check the source before starting any agent.
+            retrieved = pipeline.prepare(spec)
+            if sandbox_manager is not None:
+                sandbox_manager.ensure(
+                    spec.key,
+                    data_dir_name=spec.local_dir_name,
+                    required_provider=model.provider_id,
+                )
+            result = pipeline.run_spec(spec, prepared=retrieved)
+        except ValueError as exc:
+            # Pipeline errors are explained in their message; no traceback.
+            print(f"{spec.key}: error: {exc}", file=sys.stderr)
+            failed.append(spec.key)
+            continue
         print(
             f"{result.dataset.spec.key}: harness={result.agent.harness}, "
             f"run={result.agent.run_id}, output={result.agent.output_dir}, "
             f"metadata={result.metadata.path}, "
             f"provenance={result.provenance_path}"
         )
+    if failed:
+        print(f"failed: {', '.join(failed)}", file=sys.stderr)
+        return 1
     return 0
 
 

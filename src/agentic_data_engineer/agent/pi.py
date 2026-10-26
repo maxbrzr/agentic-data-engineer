@@ -48,7 +48,9 @@ TRANSIENT_PROVIDER_MARKERS = (
 class PiSettings:
     project_root: Path
     timeout_seconds: float = 1200
-    stall_timeout_seconds: float = 60
+    # Reasoning models can stay silent for minutes before replying; a stall
+    # restarts the session from scratch, so wait long enough not to lose work.
+    stall_timeout_seconds: float = 300
     max_continuations: int = 2
     max_provider_retries: int = 2
     retry_backoff_seconds: float = 2.0
@@ -200,7 +202,7 @@ class PiHarness:
                     str(launcher),
                     "run",
                     request.dataset.spec.key,
-                    request.dataset.data_dir.name,
+                    self._mounted_data_dir_name(request.dataset.data_dir),
                     str(request_path),
                 ]
                 if self._command_runner is None:
@@ -482,6 +484,20 @@ class PiHarness:
 
     def _require_provider_environment(self, provider_id: str) -> None:
         require_provider_environment(self.settings.project_root, provider_id)
+
+    def _mounted_data_dir_name(self, data_dir: Path) -> str:
+        """
+        Name of the folder under data/ to mount: the one containing ``data_dir``.
+
+        dcat-ap-hub downloads into ``data/<key>/<title>/``, so mounting only
+        ``data_dir.name`` would expose a different or missing folder; mount
+        ``data/<key>`` instead, as the OpenCode sandbox does.
+        """
+        data_root = self.settings.project_root / "data"
+        try:
+            return Path(data_dir).resolve().relative_to(data_root.resolve()).parts[0]
+        except (ValueError, IndexError) as exc:
+            raise ValueError(f"Dataset folder {data_dir} is not inside {data_root}") from exc
 
     @staticmethod
     def _missing_outputs(output_dir: Path) -> list[str]:

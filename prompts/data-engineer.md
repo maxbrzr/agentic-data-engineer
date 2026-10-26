@@ -34,7 +34,10 @@ Do not invent a target or silently guess when the evidence is ambiguous. After p
 
 - Treat every file under `dataset_dir` as strictly read-only.
 - Use local files only. Do not use the internet.
-- Write files only under the supplied `output_dir`.
+- Write files only under the supplied `output_dir`, and there only the deliverables
+  (`processor.py`, `train.csv`, `test.csv`). Put helper and validation scripts,
+  notes, and other scratch files in `/tmp`; the pipeline moves anything else it
+  finds in `output_dir` to `output_dir/scratch/`.
 - Do not modify source data, install packages, or write outside the output directory.
 - Do not hard-code machine-specific absolute paths in generated code.
 - Prefer deterministic behavior and record every important assumption.

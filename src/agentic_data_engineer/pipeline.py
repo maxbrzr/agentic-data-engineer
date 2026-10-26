@@ -10,6 +10,8 @@ from uuid import uuid4
 
 from .config import PipelineConfig
 from .contracts import (
+    AGENT_LOG_NAME,
+    AGENT_TRANSCRIPT_NAME,
     AgentHarness,
     AgentRequest,
     DatasetMetadataGenerator,
@@ -17,6 +19,7 @@ from .contracts import (
     DatasetSpec,
     PipelineRunResult,
     ProcessorChecker,
+    RetrievedDataset,
 )
 from .retrieval import get_example, list_examples
 
@@ -30,6 +33,7 @@ from dcat_ap_hub.metadata.constants import (
 from dcat_ap_hub.metadata.transfer import read_sources_manifest
 
 SOURCE_DATA_DIR_NAME = "data"
+SCRATCH_DIR_NAME = "scratch"
 DATASET_METADATA_NAME = METADATA_FILENAME
 # Artifacts every successful agent run must leave in its output directory.
 REQUIRED_AGENT_OUTPUTS = (PROCESSOR_FILENAME, *SPLIT_FILES)
@@ -59,19 +63,35 @@ class DataEngineeringPipeline:
             force_download=force_download,
         )
 
-    def run_spec(
+    def prepare(
         self,
         spec: DatasetSpec,
         *,
         force_download: bool | None = None,
-    ) -> PipelineRunResult:
-        """Run the pipeline for a configured example or URL-derived spec."""
+    ) -> RetrievedDataset:
+        """
+        Retrieve a dataset and check it before any agent starts.
+
+        Raises ``ValueError`` when the source cannot be used, e.g. when its
+        metadata lacks what Croissant generation needs (such as a license).
+        """
         retrieved = self.retriever.retrieve(
             spec,
             self.config.data_root,
             force=self.config.force_download if force_download is None else force_download,
         )
         self.metadata_generator.preflight(retrieved)
+        return retrieved
+
+    def run_spec(
+        self,
+        spec: DatasetSpec,
+        *,
+        force_download: bool | None = None,
+        prepared: RetrievedDataset | None = None,
+    ) -> PipelineRunResult:
+        """Run the pipeline for a configured example or URL-derived spec."""
+        retrieved = prepared or self.prepare(spec, force_download=force_download)
 
         output_dir = self._create_run_output_dir(spec.key)
         provenance_path = output_dir / "provenance.json"
@@ -84,6 +104,7 @@ class DataEngineeringPipeline:
         )
         agent_result = self.harness.run(request, self.config.model)
         self._require_agent_outputs(output_dir, agent_result.run_id)
+        scratch = self.move_scratch_files(output_dir)
         metadata_result = self.metadata_generator.generate(retrieved, output_dir)
         # Copied only after the agent and metadata steps, so the agent never
         # gets a writable copy of the raw data.
@@ -111,6 +132,7 @@ class DataEngineeringPipeline:
             agent_result,
             metadata_result,
             source_data,
+            scratch,
         )
         return PipelineRunResult(
             dataset=retrieved,
@@ -196,6 +218,34 @@ class DataEngineeringPipeline:
             and len(node.args.args) == 2
             for node in tree.body
         )
+
+    @staticmethod
+    def move_scratch_files(output_dir: Path) -> list[str]:
+        """
+        Move files the agent left besides its deliverables into ``scratch/``.
+
+        A run's top level then holds only declared artifacts; hidden harness
+        state (``.pi-sessions`` …) stays where it is. Returns the moved names.
+        """
+        declared = {
+            *REQUIRED_AGENT_OUTPUTS,
+            AGENT_LOG_NAME,
+            AGENT_TRANSCRIPT_NAME,
+            SOURCE_DATA_DIR_NAME,
+            SCRATCH_DIR_NAME,
+            "croissant.json",
+            "provenance.json",
+        }
+        moved = sorted(
+            path.name
+            for path in output_dir.iterdir()
+            if path.name not in declared and not path.name.startswith(".")
+        )
+        if moved:
+            (output_dir / SCRATCH_DIR_NAME).mkdir(exist_ok=True)
+            for name in moved:
+                shutil.move(str(output_dir / name), str(output_dir / SCRATCH_DIR_NAME / name))
+        return moved
 
     @classmethod
     def copy_source_data(
@@ -300,6 +350,7 @@ class DataEngineeringPipeline:
         agent_result,
         metadata_result,
         source_data: dict,
+        scratch: list[str] | None = None,
     ) -> None:
         model = self.config.model
         agent_identity = {
@@ -353,6 +404,8 @@ class DataEngineeringPipeline:
             "agent_run": agent_identity,
             "artifacts": artifacts,
             "source_data": source_data,
+            # Files the agent left besides its deliverables, kept for diagnosis.
+            "scratch": [f"{SCRATCH_DIR_NAME}/{name}" for name in scratch or []],
         }
         temporary_path = path.with_name(f".{path.name}.tmp")
         try:

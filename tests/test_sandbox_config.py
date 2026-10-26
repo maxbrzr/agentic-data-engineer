@@ -14,6 +14,7 @@ from agentic_data_engineer.contracts import ModelConfig
 ROOT = Path(__file__).resolve().parents[1]
 EXPECTED_GWDG_MODELS = set(MODELS_BY_PROVIDER["gwdg"])
 EXPECTED_KIT_MODELS = set(MODELS_BY_PROVIDER["kit"])
+EXPECTED_BLABLADOR_MODELS = {"alias-code", "alias-fast", "alias-large", "alias-huge"}
 
 
 class SandboxConfigurationTests(unittest.TestCase):
@@ -133,6 +134,11 @@ class SandboxConfigurationTests(unittest.TestCase):
         )
         self.assertEqual("{env:KIT_TOOLBOX_API_KEY}", kit["options"]["apiKey"])
         self.assertEqual(EXPECTED_KIT_MODELS, set(kit["models"]))
+        self.assertIn("blablador", parsed_config["enabled_providers"])
+        blablador = parsed_config["provider"]["blablador"]
+        self.assertEqual("https://api.blablador.fz-juelich.de/v1", blablador["options"]["baseURL"])
+        self.assertEqual("{env:BLABLADOR_API_KEY}", blablador["options"]["apiKey"])
+        self.assertEqual(EXPECTED_BLABLADOR_MODELS, set(blablador["models"]))
         self.assertNotRegex(container_config, r"Bearer\s+[A-Za-z0-9]")
         self.assertIn("path: .env", compose)
         self.assertNotIn(".env.opencode", compose)
@@ -181,7 +187,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         )
         self.assertEqual(
             resolve_model_config("pi", "kit", None),
-            ModelConfig("kit", "kit.glm-5.3-flash"),
+            ModelConfig("kit", "kit.deepseek-v4-flash"),
         )
         self.assertEqual(
             resolve_model_config("opencode", "opencode", None),
@@ -238,6 +244,17 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertEqual("$KIT_TOOLBOX_API_KEY", kit["apiKey"])
         self.assertTrue(kit["authHeader"])
         self.assertEqual(EXPECTED_KIT_MODELS, {item["id"] for item in kit["models"]})
+        blablador = models["providers"]["blablador"]
+        self.assertEqual("https://api.blablador.fz-juelich.de/v1", blablador["baseUrl"])
+        self.assertEqual("$BLABLADOR_API_KEY", blablador["apiKey"])
+        self.assertTrue(blablador["authHeader"])
+        self.assertEqual(
+            EXPECTED_BLABLADOR_MODELS, {item["id"] for item in blablador["models"]}
+        )
+        self.assertEqual(
+            ModelConfig("blablador", "alias-code"),
+            resolve_model_config("pi", "blablador", None),
+        )
 
     def test_dotenv_template_is_tracked_but_secret_file_is_ignored(self):
         gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
@@ -247,6 +264,7 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertIn("!.env.example", gitignore)
         self.assertIn("SAIA_API_KEY=", template.splitlines())
         self.assertIn("KIT_TOOLBOX_API_KEY=", template.splitlines())
+        self.assertIn("BLABLADOR_API_KEY=", template.splitlines())
 
 
 if __name__ == "__main__":

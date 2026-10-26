@@ -7,7 +7,7 @@
     "opencode",
     "pi"
   ],
-  "default_model": "kit.glm-5.3-flash",
+  "default_model": "kit.deepseek-v4-flash",
   "ignore": [
     "alias.",
     "azure.",

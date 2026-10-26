@@ -1,0 +1,41 @@
+{
+  "name": "Helmholtz Blablador",
+  "docs": "https://sdlaml.pages.jsc.fz-juelich.de/ai/guides/blablador_api_access/#model-aliases",
+  "base_url": "https://api.blablador.fz-juelich.de/v1",
+  "api_key_env": "BLABLADOR_API_KEY",
+  "harnesses": [
+    "opencode",
+    "pi"
+  ],
+  "default_model": "alias-code",
+  "ignore": [
+    "alias-embeddings",
+    "alias-qwen3-4b-",
+    "alias-qwen3-8b-",
+    "alias-image",
+    "alias-flux",
+    "alias-anonymizer",
+    "gpt-oss-anonymizer",
+    "gpt-3.5-turbo",
+    "text-davinci",
+    "text-embedding"
+  ],
+  "models": [
+    {
+      "id": "alias-code",
+      "name": "Blablador code (Qwen3.8 27B, 262k context)"
+    },
+    {
+      "id": "alias-fast",
+      "name": "Blablador fast (GPT-OSS 120B, 131k context)"
+    },
+    {
+      "id": "alias-large",
+      "name": "Blablador large (Qwen3.8 Flash Next)"
+    },
+    {
+      "id": "alias-huge",
+      "name": "Blablador huge (MiniMax M2.7, slow)"
+    }
+  ]
+}
