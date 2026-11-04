@@ -272,6 +272,24 @@ class CatalogAndRetrievalTests(unittest.TestCase):
 
 
 class PipelineArchitectureTests(unittest.TestCase):
+    def test_augmentation_audit_required_only_when_enabled(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            for name in ("parser.py", "train.csv", "test.csv"):
+                (root / name).touch()
+            check = DataEngineeringPipeline._require_agent_outputs
+            check(root, "test-run")
+            with self.assertRaisesRegex(ValueError, "augmentation.csv is missing"):
+                check(root, "test-run", data_augmentation=True)
+            for contents in ("", "file_name,technique\n", "file_name,technique\n,\n"):
+                (root / "augmentation.csv").write_text(contents)
+                with self.assertRaisesRegex(ValueError, "at least one audit entry"):
+                    check(root, "test-run", data_augmentation=True)
+            (root / "augmentation.csv").write_text(
+                "file_name,technique\ntrain/audio/variant.wav,noise\n"
+            )
+            check(root, "test-run", data_augmentation=True)
+
     def test_core_package_import_does_not_load_opencode(self):
         environment = dict(os.environ)
         environment["PYTHONPATH"] = "src"

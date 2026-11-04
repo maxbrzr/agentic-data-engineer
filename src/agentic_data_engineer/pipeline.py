@@ -1,3 +1,4 @@
+import csv
 import hashlib
 import json
 import re
@@ -57,7 +58,10 @@ class DataEngineeringPipeline:
             ),
         )
         agent_result = self.harness.run(request, self.config.model)
-        self._require_agent_outputs(output_dir, agent_result.run_id)
+        self._require_agent_outputs(
+            output_dir, agent_result.run_id,
+            data_augmentation=self.config.data_augmentation,
+        )
         metadata_result = self.metadata_generator.generate(retrieved, output_dir)
         self._write_provenance(
             provenance_path,
@@ -120,7 +124,9 @@ class DataEngineeringPipeline:
         return (component or "unnamed")[:80]
 
     @staticmethod
-    def _require_agent_outputs(output_dir, run_id: str) -> None:
+    def _require_agent_outputs(
+        output_dir, run_id: str, *, data_augmentation: bool = False
+    ) -> None:
         """Reject harness completion unless required artifacts reached the host."""
         missing = [
             name
@@ -132,6 +138,22 @@ class DataEngineeringPipeline:
                 f"Agent run {run_id!r} reported completion, but required host "
                 f"artifacts are missing from {output_dir}: {missing}."
             )
+
+        if data_augmentation:
+            audit_path = output_dir / "augmentation.csv"
+            if not audit_path.is_file():
+                raise ValueError(
+                    "Augmentation is enabled, but augmentation.csv is missing."
+                )
+            with audit_path.open(encoding="utf-8-sig", newline="") as stream:
+                rows = csv.reader(stream)
+                header = next(rows, None)
+                has_data = any(any(cell.strip() for cell in row) for row in rows)
+            if not header or not any(cell.strip() for cell in header) or not has_data:
+                raise ValueError(
+                    "Augmentation is enabled, but augmentation.csv must contain "
+                    "a header and at least one audit entry."
+                )
 
     def _write_provenance(
         self,

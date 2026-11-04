@@ -1,8 +1,9 @@
 ### Objective and scope
 
 Follow the main output scope. Keep `parser.py` limited to parsing and splitting;
-run augmentation, audit, previews and checks separately using unsaved execution
-code. Use local files and installed libraries only; do not create helper modules.
+run augmentation, audit, previews and checks separately using in-memory execution
+or temporary scripts/helper modules under `output_dir`. Delete these temporary
+files before completing. Use local files and installed libraries only.
 
 Loading this subprompt requires actual additional training observations in
 `train.csv`. Keep original train/test membership fixed and retain all originals.
@@ -88,9 +89,17 @@ associations in aligned lists and record each changed asset in the audit.
 
 Retain source metadata as provenance, clearly distinguished from derivative
 properties. Update existing attributes describing the derivative, such as duration;
-do not add new measurement columns solely for augmentation. Do not claim original room/device conditions describe a synthetic mixture. For
-Mixup, preserve both sources' metadata in the audit. Targets and annotations must
-remain valid under the scope above. Keep train/test column schemas identical.
+do not add new measurement columns solely for augmentation. For Mixup, preserve
+both parents' metadata in `augmentation.csv` parameters as nested lists of named
+values. Do not copy one parent's acquisition or identity metadata into the manifest
+as though it described the mixture. Retain a shared value only when it remains
+meaningful for the derivative; otherwise set the existing optional field to missing
+and explain the rule in `report.md`. Update derivable properties such as duration
+from the saved derivative. Never clear targets, required annotations or protected
+group keys to make mixing possible: reject partners with incompatible values or
+when no valid value can be retained under the task's group/split policy. Targets and
+annotations must remain valid under the scope above. Keep train/test column schemas
+identical and original rows unchanged.
 
 Report counts by class and relevant group before/after augmentation; explain any
 change caused by eligibility or count rules. Do not silently rebalance classes.
@@ -117,7 +126,10 @@ audio to estimate RIRs or noise. Do not create extra RIR files.
 Create `augmentation_preview.png` with a baseline and an example of each used
 method, preferably on a common suitable reference. Use consistent waveform/Mel
 axes and color scales and label actual settings/partners. Plot saved derivatives;
-do not generate separate example transformations. Do not create training rows solely for preview coverage.
+do not generate separate example transformations or new spectrograms from audio.
+Do not create training rows solely for preview coverage. Keep the preview outside
+model-input directories and exclude it from manifests. Verify that it is a readable
+PNG and actually shows each used method with its baseline and recorded settings.
 
 ### Validate and report
 
@@ -128,3 +140,20 @@ reproduce values and hashes from recorded sources/settings/seeds. Report used an
 rejected methods, parameter/count decisions, seed, library versions, original and
 augmented counts, validation and audit/preview paths. Print training counts and
 claim success only after actual variants exist and all applicable checks pass.
+
+### Mandatory final augmentation-prompt check
+
+Immediately before the final response, explicitly re-read the Data augmentation
+section of the supplied system instructions and verify that this augmentation
+subprompt is present and enabled. This paragraph is part of that subprompt: its
+presence means augmentation instructions were supplied. Do not infer that the
+subprompt was absent from the lack of generated variants, and do not report
+"no augmentation subprompt was present" when these instructions are included.
+
+When this subprompt is present, confirm that additional training observations were
+actually exported in `train.csv`, `augmentation.csv` exists with at least one audit
+entry, and `augmentation_preview.png` exists and passes the preview checks above.
+If any requirement is unmet, continue the augmentation work or report a concrete task-specific failure; do not claim
+successful completion of an original-only export. State explicitly in `report.md`
+and the final response that the augmentation subprompt was present and enabled,
+and report original and added training counts with the final check results.

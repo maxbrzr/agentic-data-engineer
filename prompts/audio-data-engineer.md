@@ -9,7 +9,8 @@ Create only `parser.py`, `train.csv`, `test.csv` and `report.md`, plus the selec
 raw/model-input files and required annotation assets under `train/` and `test/`.
 When augmentation is enabled, also
 create only the additional artifacts explicitly named by its subprompt.
-You may add additional code but have to delete it before completing.
+Temporary scripts and helper modules are allowed under `output_dir`; delete all
+such temporary files before completing. Retain only the specified output artifacts.
 Put decisions, mappings, source references, actual cleaning
 changes/exclusions and concise validation results in `report.md`.
 Preserving source information does not require duplicating it: retain existing
@@ -20,14 +21,18 @@ are outside this agent's output scope; do not create, modify or delete them.
 
 # Avoid redundant file references
 
-When an observation has a `file_name`, export that reference once. Do not add
-`source`, `source_file_name`, `source_path`, basename, stem or parent-name columns
-that repeat it or can be recovered from it. Apply this to both the parsed DataFrame
-and exported CSVs. Keep such values internal when needed for joins, grouping or
-validation, and document path mappings in `report.md`. Retain a source identifier
-only when it carries a distinct relationship that cannot be recovered from the
-retained fields and is needed to use the data. Preserve other distinct attributes;
-this rule removes redundant information, not columns merely named `source`.
+Use exactly one model-input reference column, `file_name`, in both the parsed
+DataFrame and exported manifests. Include every model-input file belonging to the
+observation there: a scalar path for a single file, or an ordered list of paths for
+multiple files. Do not split these paths into primary/additional/view-specific
+file columns. Document list ordering and preserve associations with annotations.
+Do not add `source`, `source_file_name`, `source_path`, basename, stem or parent-name
+columns to repeat provenance. Keep source-to-output mappings internally and in
+`report.md`, and derivative lineage in the enabled augmentation audit. Preserve
+semantic attributes and required group IDs; these are not redundant path columns.
+Annotation references such as segmentation masks remain task annotations and must
+not be mixed into the model-input path list merely to consolidate provenance.
+
 
 # Objective and boundaries
 
@@ -134,7 +139,8 @@ Use standard readers for annotation tables, such as `pd.read_csv`, `pd.read_json
 or `pd.read_parquet`. Avoid custom row-by-row parsing when an existing reader
 handles the source format; add only the dataset-specific checks actually needed.
 
-Perform those steps separately using the available tools and unsaved execution code.
+Perform those steps separately using available tools, in-memory execution or
+temporary scripts/helper modules under `output_dir`. Delete temporary files before completing.
 Write `report.md` directly after checks pass; do not generate report-writing code.
 
 Use stable source-based filenames, portable paths and collision checks. Do not
@@ -184,11 +190,13 @@ Choose and justify the same model-input representation for every row in both spl
 | Mode | Model-input files |
 | --- | --- |
 | Waveform | Original audio and enabled training derivatives under `<split>/audio/` |
-| Mel/log-Mel | Existing numeric `.npy` matrices copied unchanged to `<split>/features/` |
+| Mel/log-Mel | Existing numeric `.npy` matrices copied unchanged to `<split>/features/`, plus enabled augmented derivatives under `train/features/` |
 
 Use Mel/log-Mel spectrograms only when they already exist in the source dataset.
-Copy them unchanged; do not calculate spectrograms from audio or reconstruct audio
-from them.Load numeric arrays safely without pickle.
+Copy original matrices unchanged. When augmentation is enabled, the subprompt may
+produce additional training derivatives from these existing matrices. Never create
+Mel/log-Mel representations from waveform inputs or reconstruct audio from matrices.
+Load numeric arrays safely without pickle.
 
 Copy every selected raw/model-input file and required annotation asset to its
 observation's split directory, preserving original bytes. For observations with
@@ -196,8 +204,10 @@ multiple files, retain aligned relative-path lists in the same row and copy ever
 referenced file. Keep related observations in the same split.
 
 CSV manifests are UTF-8 with identical column order and deterministic rows.
-`file_name` identifies the primary model-input file for an observation and is the unique output key, relative to `output_dir`, referencing the
-chosen model-input file. Do not mix audio and feature paths or create extra rows
+`file_name` contains all model-input paths for one observation as defined above.
+Each path is a safe POSIX path relative to `output_dir`. Use the complete ordered
+path collection as the observation key when unique; do not assume each individual
+file identifies a whole multi-file observation. Do not mix audio and feature paths or create extra rows
 for supporting assets. Export the retained DataFrame columns, including source
 attributes, metadata and annotations. Retain only non-redundant source IDs and use
 hashes internally for required checks. Never embed audio bytes or feature arrays
@@ -240,6 +250,19 @@ augmentation may produce changed derivatives.
 {{DATA_AUGMENTATION}}
 
 # Validate and report
+
+For scalar `file_name` values, use the aggregate validator described below. For
+list-valued references, its scalar-path interface is insufficient: safely decode
+lists and build an in-memory file-level validation view containing every referenced
+model-input path, deduplicated by path while retaining observation associations
+internally. Use the existing component file, directory-coverage and duplicate
+checks on that view, and validate schema, targets, observation keys, list ordering,
+annotation associations and group boundaries on the original observation table.
+Do not write the flattened view or change the exported observation grain. Apply
+path safety, integrity, source/derivative hash and cross-split leakage checks to
+all files, not just the first path. Validate annotation assets separately. Require
+the same applicable guarantees as the aggregate validator.
+
 
 For waveform export, run `test_audio_validation` from
 `agentic_data_engineer.validation`. Pass `target_col=split_target_col` only for

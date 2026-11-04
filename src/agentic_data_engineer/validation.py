@@ -1425,10 +1425,20 @@ def test_croissant_numeric_columns_have_numeric_types(
         if record_set is None:
             raise ValueError(f"Croissant record set is missing: {split_name!r}.")
 
-        sample = pd.read_csv(_split_csv_path(path, split_name), nrows=1000)
+        # A numeric prefix does not establish a numeric column: categorical
+        # values can first occur much later in the exported split.
+        numeric_columns = None
+        for chunk in pd.read_csv(
+            _split_csv_path(path, split_name), chunksize=10_000, low_memory=False
+        ):
+            chunk_numeric = set(chunk.select_dtypes(include=["number"]).columns)
+            numeric_columns = (
+                chunk_numeric if numeric_columns is None
+                else numeric_columns & chunk_numeric
+            )
         fields = _field_map(record_set)
         bad_types = []
-        for column in sample.select_dtypes(include=["number"]).columns:
+        for column in sorted(numeric_columns or ()):
             if time_col is not None and column == time_col:
                 continue
             field = fields.get(column)

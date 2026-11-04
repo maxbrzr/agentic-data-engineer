@@ -5,7 +5,7 @@ mode: primary
 
 # Output scope
 
-Create only `parser.py`, `train.csv`, `test.csv` and `report.md`, plus the model-input
+Create only a `parser.py`, `train.csv`, `test.csv` and `report.md`, plus the model-input
 and required annotation assets specified below. When augmentation is enabled, also
 create only the additional artifacts explicitly named by its subprompt. A direct
 user request may extend this list; convenience or inferred usefulness may not.
@@ -49,7 +49,6 @@ them once as runtime arguments or variables in the unsaved execution code and
 reuse those values for all tool calls, imports, reads and exports. Pass the supplied
 `dataset_dir` as `data_dir` to `parse()`. Do not retype, abbreviate, spell-correct,
 replace substrings in, or reconstruct either root from a guessed project path.
-Do not assume that the shell or notebook working directory is the project root.
 
 Use `pathlib.Path` and join relative components with `/`; never concatenate path
 strings. For example, in the execution code (not as hard-coded parser constants):
@@ -65,21 +64,12 @@ train_path = output_root / "train.csv"
 test_path = output_root / "test.csv"
 ```
 
-Before processing, verify the supplied roots and required source files exist.
-Resolve source paths below `data_root` and output paths below `output_root`, and
-check containment after resolution, including symlinks. If a path is missing or
-outside its allowed root, report that exact path and fix the reference using the
-supplied roots. Do not create a guessed project/dataset directory to make it work.
-Use the same `parser_path` when writing and importing the parser; perform export
-through unsaved execution code as specified below. Quote every shell path or path
-variable, including paths containing spaces. Before reporting success, check that
-the required files exist in the exact supplied run-output directory.
-
 # Objective
 
 Create a reproducible processor and ML-ready train/test tables. Determine the
-source observation grain, included sources and rows, required joins, the
-best-supported classification or regression task and target, and feature,
+source observation structure, included sources and rows, required joins to merge the 
+raw data into one big dataframe and the resulting test and train split. 
+Additionally identify the best-supported classification or regression task and target, and feature,
 identifier, group, timestamp and leakage roles. Never invent or silently guess a
 target. Retain supported alternative target candidates and select the
 best-supported candidate to drive the shared split as specified below. After successful validation, export `train.csv` and `test.csv`;
@@ -94,15 +84,92 @@ dataset. If the only available source observations are already summaries, retain
 that supplied grain and document it; do not invent underlying raw measurements
 or introduce further summarization.
 
+## Time-series data
+
+For time-series data only (whether or not a time index already exists):
+
+- Merge related streams from multiple devices and sensors into shared observations
+  in `parse()`. One row represents one aligned time point within the same subject,
+  entity or recording, with separate measurement columns per device and sensor.
+  Retain a timestamp column. Stacking related streams as separate rows is not an
+  acceptable substitute for alignment. When multiple devices were recorded
+  together, merging sensors only within each device does not satisfy this goal.
+  The final measurement columns must distinguish the selected devices and sensors;
+  device identity must not remain the row axis of the joint observation.
+- Select a consistent set of jointly recorded devices/sensors and overlapping
+  periods with usable coverage. Missing devices for some subjects or recordings
+  justify excluding those subjects, recordings, devices or periods, even if this
+  loses otherwise valid data. Compare feasible combinations using temporal
+  coverage and task relevance; document the choice and losses. Do not reject
+  cross-device alignment merely to retain every subject or device. Use compatible
+  device roles across recordings only when the source supports that association.
+- Establish which devices were recorded together. Group by the shared subject,
+  entity and recording, not by device alone; never merge unrelated recordings.
+  Check timestamp units, clock origins, offsets, resets, sampling intervals and
+  overlap. Use measurement time for temporal alignment whenever available, rather
+  than arrival or reception time. Normalize measurement clocks across devices only
+  where supported by local evidence. If measurement clocks cannot be aligned
+  reliably, report that limitation instead of silently substituting arrival time.
+  Use arrival time only when measurement timestamps are absent, and document this
+  fallback and its limitations. Different rates or missing exact
+  timestamp matches are reasons to align, not to abandon merging.
+- Choose the alignment method that best fits the observed clocks, sampling rates,
+  gaps, coverage and task requirements. No binning, regular grid or nearest-time
+  method is mandatory or preferred by default. Suitable approaches may include
+  exact timestamp joins, bounded nearest-time or directional matching, common-grid
+  sample selection, or constrained one-to-one matching that minimizes time offsets
+  when sample reuse is inappropriate. Other justified approaches are allowed if
+  they preserve measured values and satisfy the same alignment constraints.
+  Compare plausible alternatives using representative recordings and measured
+  time offsets, retained coverage, sample reuse and data loss; document the chosen
+  tradeoff without requiring exhaustive benchmarking. Do not choose a method or
+  resolution solely for convenience, table size, label agreement or evaluation
+  performance. Bins, if used, must have justified boundaries and sample-selection
+  rules; assess boundary effects rather than assuming shared bin membership is
+  sufficient evidence of temporal correspondence. Do not average samples.
+  Document the included streams, reference stream or grid if applicable, tolerance,
+  direction and deterministic tie-breaking. For forecasting, do not match future
+  measurements. Prevent many-to-many row multiplication and matching across
+  recordings or recording gaps. Bound and validate the actual time spread between
+  measurements in each output row, not only their individual distances to a
+  reference time. Report the resulting offset distribution and rejected matches.
+  Keep time coordinates semantically separate from observation identity. If a
+  bin index is exported, document its origin, width and timestamp basis and verify
+  its defining formula for every row; it is not necessarily a unique row key.
+- Temporal alignment is baseline parsing and does not require augmentation.
+  Prioritize usable joint observations over retaining every raw sample: restrict
+  to overlapping periods and discard unmatched or surplus samples as needed.
+  This time-series rule takes precedence over general raw-row preservation and
+  exclusion restrictions. Define the canonical population after alignment, then
+  partition it into train/test. Apply the same alignment policy to both splits.
+- Preserve the measured values of selected samples. Do not replace them with
+  window statistics or invent measurements through interpolation. Sample selection
+  and downsampling for alignment are allowed even when they lose data. Document
+  sample reuse; keep observations sharing a source sample in the same split.
+  Never impute targets or use labels to choose temporal matches. After matching,
+  apply a documented rule for missing or conflicting labels without inventing one.
+- Report included devices/sensors, clock handling, matching rules, source and
+  aligned row counts, discarded samples, coverage, time offsets, sample reuse and
+  label conflicts per group. Explain the information lost and resulting scope.
+  If some streams cannot be aligned reliably, exclude them with concrete evidence
+  and merge the compatible streams. If no defensible alignment is possible for
+  jointly recorded devices, raise a clear error instead of exporting per-device
+  or stacked rows as a successful result. Verify that the final schema and sampled
+  rows actually combine the selected devices. Only datasets without jointly
+  recorded devices may retain single-device observations; genuinely single-stream
+  datasets retain their native structure.
+
+For non-temporal tables, do not create artificial timestamps or impose a frequency.
+
 # Target candidates and the shared split
 
-Prepare a dataset for alternative prediction tasks, not simultaneous multi-output
-prediction. Inventory all defensible target candidates from local descriptions,
+Prepare a dataset for a prediction tasks which merges different sources into one big dataframe,
+not simultaneous multi-output prediction. Inventory all defensible target candidates from local descriptions,
 metadata, annotations and data. Retain their task-relevant values in the same
 sample row and record `target_candidates` as a list of exported column names in
 `report.md` and as a constant in `parser.py`. Do not write that dataset-level list
-into every row. Candidates must have compatible sample grain and belong to the
-current modality; never manufacture labels, merge unrelated tasks or expand one
+into every row. Candidates must have compatible sample grain; 
+never manufacture labels, merge unrelated tasks or expand one
 sample into several rows. Multiple labels or annotations for one candidate stay
 in its own list-valued column; they are not separate target candidates.
 
@@ -276,7 +343,7 @@ is deterministic, independent of the working directory and has no write side eff
 Basic checks needed to parse correctly belong here; asset copying/export orchestration,
 augmentation, validation suites, report generation and a pipeline CLI do not.
 Perform those steps separately using the available tools and unsaved execution code.
-Write `report.md` directly after checks pass; do not generate report-writing code.
+Write `report.md` while implementing and validate it at the end.
 
 Choose `split_target_col` from the documented task and pass it to `parse()`.
 Retain supported alternative targets as specified above.
@@ -319,36 +386,6 @@ Implementation requirements:
 - Exclude all retained target candidates from the model-feature set. Preserve
   their columns as alternative outcomes, not automatically usable predictors.
 
-For time-indexed tables only:
-
-- The goal is to merge related time series by timestamp into shared observations,
-  with separate measurement columns per source (e.g. accelerometer and gyroscope).
-  Do not substitute concatenation or statistical summaries for temporal alignment.
-- Determine which streams belong to the same entity/device and recording. Check
-  timestamp units, clock origins, resets, sampling intervals and temporal overlap
-  per group; normalize compatible clocks without losing precision. Distinguish
-  measurement time from arrival time. Different sampling rates alone do not rule
-  out a merge, and incompatible groups do not justify skipping compatible ones.
-- Use exact timestamp joins where valid; otherwise use bounded temporal matching
-  with a documented reference stream, tolerance, direction and tie-breaking rule.
-  Never match across incompatible clocks or recording gaps, use target labels to
-  choose matches, or allow accidental many-to-many row multiplication.
-- Export the alignment timestamp, original source timestamps, match offsets and
-  necessary entity/device/recording IDs in both CSVs, even when excluded from model
-  features. Use group IDs plus alignment time as the observation key where valid;
-  verify completeness and uniqueness, adding stable source IDs for distinct samples
-  sharing a timestamp. Sort within each series; do not average duplicates.
-- Preserve raw measurement values and irregular timing. Do not create window
-  statistics or aggregate samples. Interpolation, downsampling or a regular grid
-  requires an explicit task requirement and documented information loss; estimate
-  output size before constructing a grid.
-- Validate and report match coverage, unmatched samples, sample reuse, time offsets
-  and label conflicts per group. Preserve unmatched data with explicit missingness
-  or separately as permitted by the export contract. If reliable alignment or
-  loss-preserving export is impossible, report the specific conflict; do not invent
-  matches, silently drop samples or claim an unaligned export fulfills this goal.
-
-For non-temporal tables, do not create artificial timestamps or impose a frequency.
 
 ## 3. Split before learned preprocessing
 
@@ -363,12 +400,11 @@ train and test counts.
 Choose the split strategy from the dataset structure:
 
 1. Use a documented official split when one exists and is trustworthy.
-2. Use an order-preserving boundary when future or later observations must be
-   predicted from past or earlier observations. This includes documented streams
-   and ordered sequences even when no datetime column exists.
-3. Use a group-aware split when rows share a subject, patient, machine, experiment,
+2. Use a group-aware split when rows share a subject, patient, machine, experiment,
    location, source file, or other entity and the intended evaluation requires
    unseen groups.
+3. Use an order-preserving boundary when future or later observations must be
+    predicted from past or earlier observations.
 4. For independent classification rows, use a deterministic stratified split.
 5. For independent regression rows, use a deterministic seeded split after checking target coverage.
 
@@ -378,29 +414,6 @@ strategy and seed; never split related or duplicate observations.
 Absence of timestamps does not prove independence. Before random or stratified
 splitting, establish locally that order is immaterial and no protected entity or
 sequence connects rows.
-
-For ordered tabular data:
-
-- Preserve source row order unless local evidence defines a more authoritative order.
-- If several files or entities represent separate streams, split each stream at its
-  own chronological or ordinal boundary before combining the resulting training and
-  test portions. Do not concatenate streams and then randomly split their rows.
-- If an ordering variable resets, use the reset-aware stream identity and original
-  row position; do not globally sort by the resetting value.
-- Create stable internal audit keys such as source identity and original row
-  position before concatenation. Assert for every stream that all training positions
-  precede all test positions. These audit keys may be removed from the final model
-  features after validation.
-- Distinguish source files that are partitions of one population from files that
-  define separate benchmark scenarios. Do not silently combine separate scenarios;
-  document why combining them matches the selected task.
-- Report the ordering evidence, stream boundaries, per-stream split counts, and any
-  resets or gaps that affected the decision.
-
-Use `require_chronological=True` when a genuine datetime column or DatetimeIndex is
-available to the validator. For ordered streams without datetimes, perform and
-report explicit per-stream boundary assertions using the stable source and row
-position audit keys.
 
 Split before learning preprocessing. Fit imputation, vocabularies, encoders,
 clipping and other learned transformations on train only, then apply unchanged
@@ -414,9 +427,6 @@ Additional requirements:
   distinct columns. Document source mappings and any split-target encoding;
   do not add a duplicate canonical `target` alias when several candidates exist.
 - Convert categorical features deterministically and define behavior for categories seen only in the test set.
-- Exclude identifiers and timestamps from model inputs when they are not valid
-  predictive features, but retain observation keys, time-series timestamps and
-  required grouping identifiers as metadata columns in the exported CSVs.
 - Avoid global normalization, imputation, feature selection, or aggregation that can leak test information.
 - Ensure both splits are non-empty and have identical columns in identical order.
 - Final model features and the split-driving target must be numeric, complete

@@ -1,8 +1,9 @@
 ### Objective and scope
 
 Follow the main output scope. Keep `parser.py` limited to parsing and splitting;
-run augmentation, audit, previews and checks separately using unsaved execution
-code. Use local files and installed libraries only; do not create helper modules.
+run augmentation, audit, previews and checks separately using in-memory execution
+or temporary scripts/helper modules under `output_dir`. Delete these temporary
+files before completing. Use local files and installed libraries only.
 
 Loading this subprompt requires actual additional training observations in
 `train.csv`. Implement only chosen methods using installed libraries; no model
