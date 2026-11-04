@@ -336,6 +336,9 @@ def parse(
     ...
 ```
 
+Implement `parse()` first, then write `split()` against its completed output schema.
+This specifies code-writing order; the execution and leakage-prevention rules below still apply.
+
 `parser.py` contains only `parse()`, `split()` and the imports, constants and small helpers
 needed to read, associate and clean this dataset. Keep it specific to the actual
 task; do not build a generic framework or implement unrelated task modes. Parsing
@@ -387,9 +390,9 @@ Implementation requirements:
   their columns as alternative outcomes, not automatically usable predictors.
 
 
-## 3. Split before learned preprocessing
+## 3. Implement split() after parse()
 
-Implement deterministic `split()` in `parser.py`, separate from `parse()`. It accepts
+After implementing `parse()`, implement deterministic `split()` in `parser.py` as a separate function. It accepts
 the parsed DataFrame and selected target and returns train/test DataFrames without
 writing files. Perform export separately.
 

@@ -315,6 +315,9 @@ def parse(
     ...
 ```
 
+Implement `parse()` first, then write `split()` against its completed output schema.
+This specifies code-writing order; the execution and leakage-prevention rules below still apply.
+
 `parse()` returns a minimal deterministic table with one row per primary document
 and unique `source_file_name` relative to `dataset_dir`. Include the
 split-driving target, all supported alternative candidates and indispensable

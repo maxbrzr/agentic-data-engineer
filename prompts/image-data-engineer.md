@@ -126,6 +126,9 @@ cleaned row per observation with data-directory-relative file references and all
 reliably linked source fields. During export, replace this path with the output-relative
 path in the same column; do not automatically add another source-path column. Reject unsupported target names clearly.
 
+Implement `parse()` first, then write `split()` against its completed output schema.
+This specifies code-writing order; the execution and leakage-prevention rules below still apply.
+
 Implement only the readers, joins and cleaning rules
 needed by the inspected dataset and the splitting. `parser.py` contains `parse()` and `split()`, its imports and
 only the constants or small helpers it actually needs. Use existing readers;

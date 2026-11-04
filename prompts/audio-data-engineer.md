@@ -126,6 +126,9 @@ per eligible observation, with file references relative to `data_dir`, the selec
 and reliably linked source attributes and labels. Reject
 unsupported target names clearly.
 
+Implement `parse()` first, then write `split()` against its completed output schema.
+This specifies code-writing order; the execution and leakage-prevention rules below still apply.
+
 `parser.py` contains only `parse()`, `split()` and the imports, constants and helpers
 needed to read, associate, join and clean this dataset. Keep it specific to the actual
 task; do not build a generic framework or implement unrelated task modes. Parsing
