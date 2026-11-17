@@ -5,6 +5,7 @@ ARG PI_VERSION=0.82.1
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         ca-certificates \
+        ffmpeg \
         python3 \
         python3-venv \
         ripgrep \

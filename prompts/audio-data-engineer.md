@@ -185,7 +185,7 @@ valid samples merely to pass checks.
 Write `parser.py`, `report.md`, `train.csv` and `test.csv` at the output root.
 For waveform inputs, copy selected source audio byte-for-byte to `<split>/audio/`.
 Supported source formats are `.aac`, `.aif`, `.aiff`, `.flac`, `.m4a`, `.mp3`, `.ogg`,
-`.opus` and `.wav`; fail clearly for required unsupported formats. Source copies
+`.opus`, `.wav` and `.webm`; fail clearly for required unsupported formats. Source copies
 retain their suffixes. Metadata cleaning does not authorize audio repair.
 
 Choose and justify the same model-input representation for every row in both splits:
@@ -221,7 +221,7 @@ strings. Keep scalar values scalar. Map named source fields to separate columns;
 use aligned lists or nested lists with a documented element order for repeated
 records. The same index must refer to the same item across aligned columns.
 Use `None` for missing item values and `[]` only for a known empty collection.
-Serialize list cells with canonical Python `repr()` in CSV and read them safely
+Serialize list cells as valid Python list literals in CSV and read them safely
 with `ast.literal_eval`, never `eval()`. This concerns table cells; existing source
 JSON files may still be read as input.
 
@@ -232,7 +232,7 @@ Use if suitable. If the underlying task is a little bit different, keep the unde
 | --- | --- |
 | Single-label classification | Human-readable `label` |
 | Regression | Finite numeric values under the selected target name |
-| Multi-label classification | Sorted unique label list with consistent source scalar types |
+| Multi-label classification | Sorted unique label list with consistent source scalar types, serialized with canonical Python `repr()` for target-coverage validation |
 | Whole-recording recognition, translation or synthesis | Authoritative `text`; translation uses target-language text |
 | Segmented recognition/translation | Aligned `start_time`, `end_time`, `text` lists |
 | Captioning | `text`, or `captions` lists when multiple captions exist |

@@ -95,6 +95,37 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
                 {record_set["name"] for record_set in generated["recordSet"]},
             )
 
+    def test_catalog_metadata_without_issued_omits_publication_date(self):
+        import shutil
+        from agentic_data_engineer.retrieval import get_example
+
+        spec = get_example("Vale - Semantic Terrain Segmentation")
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "src/agentic_data_engineer/retrieval"
+            / spec.metadata_resource
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            data_dir = root / "data"
+            output_dir = root / "output"
+            data_dir.mkdir()
+            output_dir.mkdir()
+            shutil.copyfile(source, data_dir / "dcat-metadata.jsonld")
+            for split in ("train", "test"):
+                (output_dir / f"{split}.csv").write_text(
+                    "feature,target\n1.5,0\n2.5,1\n", encoding="utf-8"
+                )
+            dataset = RetrievedDataset(spec, data_dir, spec.title)
+            generator = CroissantBakerMetadataGenerator()
+            generator.preflight(dataset)
+            result = generator.generate(dataset, output_dir)
+            generated = json.loads(result.path.read_text(encoding="utf-8"))
+            self.assertNotIn("datePublished", generated)
+            self.assertEqual("2019-12-21T19:30:20.830000Z", generated["dateModified"])
+            self.assertIn("Sadegh Hosseinpoor", str(generated["creator"]))
+            self.assertEqual("https://spdx.org/licenses/CC0-1.0.html", generated["license"])
+
     def test_missing_split_fails_before_baker_runs(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
@@ -199,7 +230,7 @@ class CroissantBakerMetadataGeneratorTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 ValueError,
-                r"description.*license.*citation.*date_published.*creators",
+                r"description.*license.*citation.*creators",
             ):
                 CroissantBakerMetadataGenerator().preflight(
                     RetrievedDataset(spec, data_dir, spec.title)

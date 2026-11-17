@@ -115,7 +115,8 @@ record ordered `parent_row_indices`, corresponding `parent_sha256` values, weigh
 or categorical choices, affected fields and settings. Include every generating
 parent and verify that all parent references resolve to retained original training
 rows. Serialize parameters as a Python list of `[name, value]` pairs with nested
-lists where needed, using canonical `repr()` and `ast.literal_eval`, never `eval()`.
+lists where needed, serialized as valid Python list literals and read with
+`ast.literal_eval`, never `eval()`.
 
 Hash a documented canonical serialization of exported model features and targets,
 excluding IDs. Hashes must resolve against the final exported file. Record the

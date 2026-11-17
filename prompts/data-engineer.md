@@ -367,7 +367,7 @@ strings. Keep scalar values scalar. Map named source fields to separate columns;
 use aligned lists or nested lists with a documented element order for repeated
 records. The same index must refer to the same item across aligned columns.
 Use `None` for missing item values and `[]` only for a known empty collection.
-Serialize list cells with canonical Python `repr()` in CSV and read them safely
+Serialize list cells as valid Python list literals in CSV and read them safely
 with `ast.literal_eval`, never `eval()`. This concerns table cells; existing source
 JSON files may still be read as input.
 

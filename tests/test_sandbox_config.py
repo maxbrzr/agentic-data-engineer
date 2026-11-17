@@ -140,20 +140,24 @@ class SandboxConfigurationTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        for example_key in (
-            "tcm-predictive-maintenance",
-            "chemical-process-safety",
-            "industry-5-cyber-physical-systems",
-            "floor-type-detection",
-            "printed-paper-scratches",
-            "mimii-sound-anomaly-detection",
-            "mimii-dg",
-        ):
+        from agentic_data_engineer.retrieval import EXAMPLE_DATASETS
+
+        for example_key in EXAMPLE_DATASETS:
             self.assertIn(example_key, launcher)
         self.assertIn('case "$example_key" in', launcher)
         self.assertIn('ADE_UID=$(id -u)', launcher)
         self.assertIn('ADE_GID=$(id -g)', launcher)
         self.assertIn("--force-recreate", launcher)
+
+    def test_launcher_example_allowlists_match_catalog(self):
+        from agentic_data_engineer.retrieval import EXAMPLE_DATASETS
+
+        for name in ("opencode", "pi"):
+            with self.subTest(launcher=name):
+                launcher = (ROOT / "scripts" / name).read_text(encoding="utf-8")
+                case = launcher.split('case "$example_key" in', 1)[1]
+                allowed = case.split(") ;;", 1)[0].strip().split("|")
+                self.assertEqual(set(EXAMPLE_DATASETS), {key.strip('"') for key in allowed})
 
     def test_cli_documents_automatic_sandbox_management(self):
         cli = (

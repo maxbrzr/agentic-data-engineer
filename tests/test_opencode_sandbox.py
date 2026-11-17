@@ -24,14 +24,14 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
     def test_attestation_proves_container_write_reached_host_output(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             output_dir = Path(temp_dir).resolve()
-            probe = output_dir / ".opencode-sandbox-live-probe"
-            probe.write_text("matching-token", encoding="utf-8")
+            probe = output_dir / ".opencode-sandbox-live-probe-0123456789abcdef0123456789abcdef"
+            probe.write_text("0123456789abcdef0123456789abcdef", encoding="utf-8")
             response = io.BytesIO(
                 json.dumps(
                     {
                         "output_dir": str(output_dir),
                         "probe_name": probe.name,
-                        "probe_token": "matching-token",
+                        "probe_token": "0123456789abcdef0123456789abcdef",
                     }
                 ).encode("utf-8")
             )
@@ -55,8 +55,8 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
                 json.dumps(
                     {
                         "output_dir": str(output_dir),
-                        "probe_name": ".opencode-sandbox-live-probe",
-                        "probe_token": "container-only-token",
+                        "probe_name": ".opencode-sandbox-live-probe-fedcba9876543210fedcba9876543210",
+                        "probe_token": "fedcba9876543210fedcba9876543210",
                     }
                 ).encode("utf-8")
             )
@@ -76,14 +76,14 @@ class OpencodeSandboxManagerTests(unittest.TestCase):
             output_root = Path(temp_dir).resolve()
             run_dir = output_root / "runs" / "one-run"
             run_dir.mkdir(parents=True)
-            probe = output_root / ".opencode-sandbox-live-probe"
-            probe.write_text("matching-token", encoding="utf-8")
+            probe = output_root / ".opencode-sandbox-live-probe-0123456789abcdef0123456789abcdef"
+            probe.write_text("0123456789abcdef0123456789abcdef", encoding="utf-8")
             response = io.BytesIO(
                 json.dumps(
                     {
                         "output_dir": str(output_root),
                         "probe_name": probe.name,
-                        "probe_token": "matching-token",
+                        "probe_token": "0123456789abcdef0123456789abcdef",
                     }
                 ).encode("utf-8")
             )

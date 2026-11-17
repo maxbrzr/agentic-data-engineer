@@ -16,9 +16,20 @@ discovery and publishing are not implemented yet:
 - data integration across datasets;
 - non-tabular data.
 
-The multimodal Floor Type Detection example is currently handled as an
-explicit sensor-only tabular experiment; its camera files are inventoried but
-not used as model features.
+## Enabled examples
+
+| Example key | Data / task |
+| --- | --- |
+| `copper-rings-insertion-attempts` | Multimodal: RGB images, robot pose and force/torque data (Zenodo) |
+| `machine-predictive-maintenance-classification` | Simple CSV, machine failure classification ([HammerHAI](https://data.hammerhai.eu/de/dataset/1697740), Kaggle download) |
+| `Workpieces image dataset` | Image classification, workpiece surface defects (Zenodo) |
+| `critical-manufacturing` | Local CSV |
+| `Vale - Semantic Terrain Segmentation` | Image segmentation |
+| `printed-paper-scratches` | Printed-paper image defects |
+| `bearing` | Audio anomaly detection |
+
+Workpieces uses the existing `data/Workpieces image dataset/` directory. Run it with
+`--example "Workpieces image dataset" --prompt prompts/image-data-engineer.md`.
 
 ## Quick start
 
@@ -35,8 +46,18 @@ List or run an example:
 
 ```bash
 uv run --extra opencode agentic-data-engineer --list-examples
-uv run --extra opencode agentic-data-engineer --example tcm-predictive-maintenance
+uv run --extra opencode agentic-data-engineer --example machine-predictive-maintenance-classification
 ```
+
+Run the Copper Rings Insertion Attempts example with the default prompt:
+
+```bash
+uv run --extra opencode agentic-data-engineer --example copper-rings-insertion-attempts
+```
+
+The dataset pairs RGB images with robot pose and force/torque measurements.
+The folders identify the insertion slot and target offset. The dataset
+description does not specify success/failure labels.
 
 Run the complete printed-paper image dataset with the image prompt:
 
@@ -53,24 +74,11 @@ Audio datasets use the same pipeline with an explicit audio prompt:
 
 ```bash
 uv run --extra opencode agentic-data-engineer \
-  --example mimii-sound-anomaly-detection \
+  --example bearing \
   --harness opencode \
   --provider kit \
   --model kit.qwen3.5-397b-A17b \
   --prompt prompts/audio-data-engineer.md
-```
-
-An experimental Pi run on the sensor portion of the Floor Type Detection
-dataset can be started with larger timeouts for its many small CSV files:
-
-```bash
-uv run agentic-data-engineer \
-  --harness pi \
-  --example floor-type-detection \
-  --provider kit \
-  --model kit.qwen3.5-397b-A17b \
-  --pi-timeout 7200 \
-  --pi-stall-timeout 600
 ```
 
 OpenCode is selected automatically and uses
@@ -96,7 +104,7 @@ Select GWDG and a model when running the pipeline:
 
 ```bash
 uv run --extra opencode agentic-data-engineer \
-  --example tcm-predictive-maintenance \
+  --example machine-predictive-maintenance-classification \
   --provider gwdg \
   --model glm-4.7
 ```
@@ -132,13 +140,13 @@ Run one of them with either harness:
 
 ```bash
 uv run --extra opencode agentic-data-engineer \
-  --example tcm-predictive-maintenance \
+  --example machine-predictive-maintenance-classification \
   --provider kit \
   --model kit.mistral-small-4-119b-a8b
 
 uv run agentic-data-engineer \
   --harness pi \
-  --example tcm-predictive-maintenance \
+  --example machine-predictive-maintenance-classification \
   --provider kit \
   --model kit.mistral-small-4-119b-a8b
 ```
@@ -157,7 +165,7 @@ uv sync
 
 uv run agentic-data-engineer \
   --harness pi \
-  --example tcm-predictive-maintenance \
+  --example machine-predictive-maintenance-classification \
   --provider gwdg \
   --model glm-4.7 \
 ```

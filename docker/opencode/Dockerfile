@@ -5,6 +5,7 @@ ARG OPENCODE_VERSION=1.18.9
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         ca-certificates \
+        ffmpeg \
         python3 \
         python3-venv \
         ripgrep \

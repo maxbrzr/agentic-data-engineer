@@ -219,7 +219,7 @@ strings. Keep scalar values scalar. Map named source fields to separate columns;
 use aligned lists or nested lists with a documented element order for repeated
 records. The same index must refer to the same item across aligned columns.
 Use `None` for missing item values and `[]` only for a known empty collection.
-Serialize list cells with canonical Python `repr()` in CSV and read them safely
+Serialize list cells as valid Python list literals in CSV and read them safely
 with `ast.literal_eval`, never `eval()`. This concerns table cells; existing source
 JSON files may still be read as input.
 
@@ -230,7 +230,7 @@ remain available; with several target candidates use distinct documented names.
 | --- | --- |
 | Single-label classification | Human-readable `label` |
 | Regression | Finite numeric values under the selected target name |
-| Multi-label classification | Sorted unique label list with consistent source scalar types |
+| Multi-label classification | Sorted unique label list with consistent source scalar types, serialized with canonical Python `repr()` for target-coverage validation |
 | Captioning | `text`, or `captions` lists if multiple captions exist; retain source IDs/attributes |
 | Detection/instance segmentation | Aligned list columns for source object fields such as IDs, labels, boxes, masks, area, polygons, keypoints and attributes |
 | Semantic segmentation | Existing mask paths and class-value mappings, or preserved source polygons/RLE/other encodings |

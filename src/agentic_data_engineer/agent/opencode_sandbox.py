@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -35,9 +36,9 @@ def read_sandbox_attestation(
     probe_token = marker.get("probe_token")
     if (
         not isinstance(output_value, str)
-        or probe_name != ".opencode-sandbox-live-probe"
         or not isinstance(probe_token, str)
-        or not probe_token
+        or re.fullmatch(r"[0-9a-f]{32}", probe_token) is None
+        or probe_name != f".opencode-sandbox-live-probe-{probe_token}"
     ):
         raise ValueError("sandbox attestation has no valid live-mount probe")
 

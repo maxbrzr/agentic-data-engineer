@@ -3,38 +3,22 @@ from types import MappingProxyType
 from ..contracts import DatasetSpec
 
 _EXAMPLE_DATASETS = {
-    "heterogeneity-activity-recognition": DatasetSpec(
-        key="heterogeneity-activity-recognition",
-        title="Heterogeneity Activity Recognition",
-        url="https://archive.ics.uci.edu/dataset/344/heterogeneity+activity+recognition",
-        metadata_resource="metadata/heterogeneity-activity-recognition.jsonld",
+    "copper-rings-insertion-attempts": DatasetSpec(
+        key="copper-rings-insertion-attempts",
+        title="Copper Rings Insertion Attempts Dataset",
+        url="https://data.hammerhai.eu/de/dataset/10-5281-zenodo-6364950",
+        metadata_resource="metadata/copper-rings-insertion-attempts.jsonld",
     ),
-    "tcm-predictive-maintenance": DatasetSpec(
-        key="tcm-predictive-maintenance",
-        title="TCM: Benchmark Datasets for Predictive Maintenance in Steel Manufacturing",
-        url="http://data.sdil.de/en/dataset/10-5281-zenodo-11469702",
+    "critical-manufacturing": DatasetSpec(
+        key="critical-manufacturing",
+        title="Critical Manufacturing (local CSV)",
+        url="urn:local:critical-manufacturing",
     ),
-    "chemical-process-safety": DatasetSpec(
-        key="chemical-process-safety",
-        title="AI-Ready Simulation Dataset for Chemical Process Safety and Accident Prevention",
-        url="http://data.sdil.de/en/dataset/10-5281-zenodo-18200704",
-    ),
-    "industry-5-cyber-physical-systems": DatasetSpec(
-        key="industry-5-cyber-physical-systems",
-        title=(
-            "Smart Cyber-Physical Systems Dataset for Real-Time Optimization, "
-            "Resilience, and Sustainability in Industry 5.0"
-        ),
-        url="http://data.sdil.de/en/dataset/10-5281-zenodo-18177239",
-    ),
-    "floor-type-detection": DatasetSpec(
-        key="floor-type-detection",
-        title="Floor Type Detection Dataset",
-        url=(
-            "http://blue.data.sdil.de/de/dataset/"
-            "https-darus-uni-stuttgart-de-dataset-xhtml-"
-            "persistentid-doi-10-18419-darus-4353"
-        ),
+    "Vale - Semantic Terrain Segmentation": DatasetSpec(
+        key="Vale - Semantic Terrain Segmentation",
+        title="Vale - Semantic Terrain Segmentation",
+        url="https://data.hammerhai.eu/de/dataset/452430",
+        metadata_resource="metadata/Vale - Semantic Terrain Segmentation.jsonld",
     ),
     "printed-paper-scratches": DatasetSpec(
         key="printed-paper-scratches",
@@ -44,34 +28,23 @@ _EXAMPLE_DATASETS = {
         ),
         url="https://data.sdil.de/en/dataset/10-5281-zenodo-6021701",
     ),
-    "mimii-sound-anomaly-detection": DatasetSpec(
-        key="mimii-sound-anomaly-detection",
-        title=(
-            "MIMII Dataset: Sound Dataset for Malfunctioning Industrial "
-            "Machine Investigation and Inspection"
-        ),
-        url="http://data.sdil.de/en/dataset/10-5281-zenodo-3384388",
-    ),
-    "mimii-dg": DatasetSpec(
-        key="mimii-dg",
-        title=(
-            "MIMII DG: Sound Dataset for Malfunctioning Industrial Machine "
-            "Investigation for Domain Generalization Task"
-        ),
-        url="https://zenodo.org/records/6355122",
-        metadata_resource="metadata/mimii-dg.jsonld",
-    ),
     "bearing": DatasetSpec(
         key="bearing",
         title="DCASE 2022 Task 2 Development Dataset: Bearing subset",
         url="https://zenodo.org/records/6355122",
         metadata_resource="metadata/mimii-dg-bearing.jsonld",
     ),
-    "covid-19-nlp-text-classification": DatasetSpec(
-        key="covid-19-nlp-text-classification",
-        title="Coronavirus tweets NLP - Text Classification",
-        url="https://www.kaggle.com/datasets/datatattle/covid-19-nlp-text-classification",
-        metadata_resource="metadata/covid-19-nlp-text-classification.jsonld",
+    "machine-predictive-maintenance-classification": DatasetSpec(
+        key="machine-predictive-maintenance-classification",
+        title="Machine Predictive Maintenance Classification",
+        url="https://data.hammerhai.eu/de/dataset/1697740",
+        metadata_resource="metadata/machine-predictive-maintenance-classification.jsonld",
+    ),
+    "Workpieces image dataset": DatasetSpec(
+        key="Workpieces image dataset",
+        title="Workpieces image dataset",
+        url="https://zenodo.org/records/16361102",
+        metadata_resource="metadata/workpieces-image-dataset.jsonld",
     ),
 }
 

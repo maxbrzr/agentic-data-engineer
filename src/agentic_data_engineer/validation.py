@@ -36,6 +36,7 @@ SUPPORTED_AUDIO_EXTENSIONS = {
     ".ogg",
     ".opus",
     ".wav",
+    ".webm",
 }
 
 
@@ -201,8 +202,40 @@ def test_datetimeindex_consistency(
         )
 
 
-# Split and leakage validation
+def _test_inline_list_columns(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    list_columns: Sequence[str] | None,
+) -> None:
+    """Require each selected cell to contain a safely readable Python list literal."""
+    columns = list(list_columns or ())
+    if not columns:
+        return
 
+    for split_name, split_df in (("Training split", train_df), ("Test split", test_df)):
+        _require_columns(split_df, columns, dataframe_name=split_name)
+        for column in columns:
+            for row_index, value in split_df[column].items():
+                if not isinstance(value, str):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must encode {column!r} as "
+                        "a Python list literal."
+                    )
+                try:
+                    items = ast.literal_eval(value)
+                except (SyntaxError, ValueError) as exc:
+                    raise ValueError(
+                        f"{split_name} row {row_index} contains an invalid list "
+                        f"literal in {column!r}: {value!r}."
+                    ) from exc
+                if not isinstance(items, list):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must contain a list in "
+                        f"{column!r}."
+                    )
+
+
+# Split and leakage validation
 
 def test_split_schema(train_df: pd.DataFrame, test_df: pd.DataFrame) -> None:
     """Require identical ordered columns and dtypes in both splits."""
@@ -403,9 +436,179 @@ def test_tabular_splits(
         test_classification_labels(train_df, test_df, target_col)
 
 
+# Image validation
+
+
+def test_image_manifests(train_df: pd.DataFrame, test_df: pd.DataFrame) -> None:
+    """Require matching non-empty schemas and unique, complete image paths."""
+    test_split_schema(train_df, test_df)
+    for split_name, manifest in (("train", train_df), ("test", test_df)):
+        _require_columns(manifest, ["file_name"], dataframe_name=split_name)
+        paths = manifest["file_name"]
+        if paths.isna().any():
+            raise ValueError(f"{split_name} contains missing file_name values.")
+        if paths.duplicated().any():
+            raise ValueError(f"{split_name} contains duplicate file_name values.")
+
+    shared_paths = set(train_df["file_name"]) & set(test_df["file_name"])
+    if shared_paths:
+        raise ValueError("Train and test reference the same file_name values.")
+
+
+def _resolve_image_path(output_dir: Path, file_name: object, split_name: str) -> Path:
+    """Resolve a safe split-relative image path inside the output directory."""
+    if not isinstance(file_name, str) or not file_name.strip():
+        raise ValueError(f"{split_name} contains an empty or non-string file_name.")
+    if "\\" in file_name:
+        raise ValueError(
+            f"{split_name} file_name must use portable POSIX separators: {file_name!r}."
+        )
+
+    relative_path = Path(file_name)
+    if relative_path.is_absolute() or ".." in relative_path.parts:
+        raise ValueError(
+            f"{split_name} file_name must be a safe relative path: {file_name!r}."
+        )
+    expected_prefix = (split_name, "images")
+    if len(relative_path.parts) < 3 or relative_path.parts[:2] != expected_prefix:
+        raise ValueError(
+            f"{split_name} file_name must stay below {split_name}/images/: "
+            f"{file_name!r}."
+        )
+
+    path = output_dir / relative_path
+    try:
+        resolved = path.resolve(strict=True)
+    except FileNotFoundError as exc:
+        raise ValueError(f"Referenced image does not exist: {file_name!r}.") from exc
+
+    resolved_output = output_dir.resolve()
+    if resolved_output not in resolved.parents:
+        raise ValueError(f"Referenced image escapes output_dir: {file_name!r}.")
+    if not resolved.is_file():
+        raise ValueError(f"Referenced image is not a file: {file_name!r}.")
+    return resolved
+
+def test_image_files(
+    manifest_df: pd.DataFrame,
+    output_dir: str | Path,
+    split_name: str,
+) -> dict[str, str]:
+    """Require every manifest image to be safe, present, and fully decodable.
+
+    Returns a mapping from manifest path to SHA-256 digest so callers can reuse
+    the hashes for duplicate or lineage checks.
+    """
+    from PIL import Image, UnidentifiedImageError
+
+    _require_dataframe(manifest_df, f"{split_name} manifest")
+    _require_columns(
+        manifest_df, ["file_name"], dataframe_name=f"{split_name} manifest"
+    )
+    root = Path(output_dir)
+    if not root.is_dir():
+        raise ValueError(f"output_dir is not a directory: {root}.")
+
+    hashes: dict[str, str] = {}
+    for file_name in manifest_df["file_name"]:
+        path = _resolve_image_path(root, file_name, split_name)
+        try:
+            with Image.open(path) as image:
+                image.verify()
+            with Image.open(path) as image:
+                image.load()
+        except (OSError, UnidentifiedImageError) as exc:
+            raise ValueError(f"Unreadable image: {file_name!r}: {exc}") from exc
+
+        with path.open("rb") as stream:
+            hashes[file_name] = hashlib.file_digest(stream, "sha256").hexdigest()
+    return hashes
+
+def test_image_directory_matches_manifest(
+    manifest_df: pd.DataFrame,
+    output_dir: str | Path,
+    split_name: str,
+) -> None:
+    """Require an exact match between manifest paths and exported image files."""
+    _require_dataframe(manifest_df, f"{split_name} manifest")
+    _require_columns(
+        manifest_df, ["file_name"], dataframe_name=f"{split_name} manifest"
+    )
+    root = Path(output_dir)
+    image_dir = root / split_name / "images"
+    expected = set(manifest_df["file_name"].tolist())
+    actual = {
+        path.relative_to(root).as_posix()
+        for path in image_dir.rglob("*")
+        if path.is_file() or path.is_symlink()
+    }
+
+    missing = sorted(expected - actual, key=str)
+    unexpected = sorted(actual - expected)
+    if missing or unexpected:
+        raise ValueError(
+            f"{split_name} image directory does not match its manifest; "
+            f"missing files: {missing[:10]}, "
+            f"files not declared in manifest: {unexpected[:10]}."
+        )
+
+def test_no_within_split_image_duplicates(
+    file_hashes: dict[str, str], split_name: str
+) -> None:
+    """Reject different image paths with identical file bytes within a split."""
+    paths_by_hash: dict[str, str] = {}
+    for file_name, digest in file_hashes.items():
+        if digest in paths_by_hash:
+            raise ValueError(
+                f"Found byte-identical images within {split_name}: "
+                f"{paths_by_hash[digest]!r} and {file_name!r}."
+            )
+        paths_by_hash[digest] = file_name
+
+def test_no_cross_split_image_duplicates(
+    train_hashes: dict[str, str],
+    test_hashes: dict[str, str],
+) -> None:
+    """Reject byte-identical image content shared across train and test."""
+    train_by_hash = {digest: name for name, digest in train_hashes.items()}
+    test_by_hash = {digest: name for name, digest in test_hashes.items()}
+    shared_hashes = set(train_by_hash).intersection(test_by_hash)
+    if shared_hashes:
+        examples = [
+            (train_by_hash[digest], test_by_hash[digest])
+            for digest in sorted(shared_hashes)[:10]
+        ]
+        raise ValueError(
+            f"Found {len(shared_hashes)} byte-identical image(s) across train and "
+            f"test; examples: {examples}."
+        )
+
+def test_augmentation_preview(output_dir: str | Path) -> None:
+    """Require a valid PNG preview whenever augmentation.csv is present."""
+    from PIL import Image, UnidentifiedImageError
+
+    root = Path(output_dir)
+    if not (root / "augmentation.csv").is_file():
+        return
+    preview_path = root / "augmentation_preview.png"
+    if not preview_path.is_file():
+        raise ValueError(
+            "augmentation.csv exists but augmentation_preview.png is missing."
+        )
+    try:
+        with Image.open(preview_path) as preview:
+            if preview.format != "PNG":
+                raise ValueError("augmentation_preview.png must use PNG format.")
+            preview.verify()
+        with Image.open(preview_path) as preview:
+            preview.load()
+            if preview.width < 1 or preview.height < 1:
+                raise ValueError("augmentation_preview.png has invalid dimensions.")
+    except (OSError, UnidentifiedImageError) as exc:
+        raise ValueError(f"Unreadable augmentation preview: {exc}") from exc
+
+
 # Media-manifest target validation
-
-
 def _test_manifest_target_coverage(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
@@ -413,6 +616,7 @@ def _test_manifest_target_coverage(
     *,
     multi_label: bool,
 ) -> None:
+    """Require complete classification targets and training coverage of test labels."""
     test_target_column(train_df, target_col, dataframe_name="Training split")
     test_target_column(
         test_df,
@@ -505,326 +709,6 @@ def _test_manifest_target_coverage(
             f"{sorted(map(str, unseen_targets))}."
         )
 
-
-def _test_inline_list_columns(
-    train_df: pd.DataFrame,
-    test_df: pd.DataFrame,
-    list_columns: Sequence[str] | None,
-) -> None:
-    columns = list(list_columns or ())
-    if not columns:
-        return
-
-    for split_name, split_df in (("Training split", train_df), ("Test split", test_df)):
-        _require_columns(split_df, columns, dataframe_name=split_name)
-        for column in columns:
-            for row_index, value in split_df[column].items():
-                if not isinstance(value, str):
-                    raise ValueError(
-                        f"{split_name} row {row_index} must encode {column!r} as "
-                        "a Python list literal."
-                    )
-                try:
-                    items = ast.literal_eval(value)
-                except (SyntaxError, ValueError) as exc:
-                    raise ValueError(
-                        f"{split_name} row {row_index} contains an invalid list "
-                        f"literal in {column!r}: {value!r}."
-                    ) from exc
-                if not isinstance(items, list):
-                    raise ValueError(
-                        f"{split_name} row {row_index} must contain a list in "
-                        f"{column!r}."
-                    )
-                if value != repr(items):
-                    raise ValueError(
-                        f"{split_name} row {row_index} must use the canonical Python "
-                        f"list representation in {column!r}; expected {repr(items)!r}."
-                    )
-
-
-# Image validation
-
-
-def test_image_manifests(
-    train_df: pd.DataFrame,
-    test_df: pd.DataFrame,
-    target_col: str | None = None,
-    *,
-    multi_label: bool = False,
-) -> None:
-    """Validate the common schema and keys of image split manifests."""
-    test_split_schema(train_df, test_df)
-
-    for split_name, split_df in (("Training split", train_df), ("Test split", test_df)):
-        _require_columns(split_df, ["file_name"], dataframe_name=split_name)
-        if split_df["file_name"].isna().any():
-            raise ValueError(f"{split_name} contains missing file_name values.")
-        if split_df["file_name"].duplicated().any():
-            duplicates = split_df.loc[
-                split_df["file_name"].duplicated(keep=False), "file_name"
-            ].astype(str)
-            raise ValueError(
-                f"{split_name} contains duplicate file_name values: "
-                f"{duplicates.unique()[:10].tolist()}."
-            )
-
-    shared_paths = set(train_df["file_name"]).intersection(test_df["file_name"])
-    if shared_paths:
-        raise ValueError(
-            "Train and test reference the same file_name values: "
-            f"{sorted(map(str, shared_paths))[:10]}."
-        )
-
-    if target_col is None:
-        return
-
-    _test_manifest_target_coverage(
-        train_df, test_df, target_col, multi_label=multi_label
-    )
-
-
-def _resolve_image_path(output_dir: Path, file_name: object, split_name: str) -> Path:
-    if not isinstance(file_name, str) or not file_name.strip():
-        raise ValueError(f"{split_name} contains an empty or non-string file_name.")
-    if "\\" in file_name:
-        raise ValueError(
-            f"{split_name} file_name must use portable POSIX separators: {file_name!r}."
-        )
-
-    relative_path = Path(file_name)
-    if relative_path.is_absolute() or ".." in relative_path.parts:
-        raise ValueError(
-            f"{split_name} file_name must be a safe relative path: {file_name!r}."
-        )
-    expected_prefix = (split_name, "images")
-    if len(relative_path.parts) < 3 or relative_path.parts[:2] != expected_prefix:
-        raise ValueError(
-            f"{split_name} file_name must stay below {split_name}/images/: "
-            f"{file_name!r}."
-        )
-
-    path = output_dir / relative_path
-    try:
-        resolved = path.resolve(strict=True)
-    except FileNotFoundError as exc:
-        raise ValueError(f"Referenced image does not exist: {file_name!r}.") from exc
-
-    resolved_output = output_dir.resolve()
-    if resolved_output not in resolved.parents:
-        raise ValueError(f"Referenced image escapes output_dir: {file_name!r}.")
-    if not resolved.is_file():
-        raise ValueError(f"Referenced image is not a file: {file_name!r}.")
-    return resolved
-
-
-def test_image_files(
-    manifest_df: pd.DataFrame,
-    output_dir: str | Path,
-    split_name: str,
-) -> dict[str, str]:
-    """Require every manifest image to be safe, present, and fully decodable.
-
-    Returns a mapping from manifest path to SHA-256 digest so callers can reuse
-    the hashes for duplicate or lineage checks.
-    """
-    from PIL import Image, UnidentifiedImageError
-
-    _require_dataframe(manifest_df, f"{split_name} manifest")
-    _require_columns(
-        manifest_df, ["file_name"], dataframe_name=f"{split_name} manifest"
-    )
-    root = Path(output_dir)
-    if not root.is_dir():
-        raise ValueError(f"output_dir is not a directory: {root}.")
-
-    hashes: dict[str, str] = {}
-    for file_name in manifest_df["file_name"]:
-        path = _resolve_image_path(root, file_name, split_name)
-        try:
-            with Image.open(path) as image:
-                image.verify()
-            with Image.open(path) as image:
-                image.load()
-        except (OSError, UnidentifiedImageError) as exc:
-            raise ValueError(f"Unreadable image: {file_name!r}: {exc}") from exc
-
-        digest = hashlib.sha256(path.read_bytes()).hexdigest()
-        hashes[file_name] = digest
-    return hashes
-
-
-def test_image_directory_matches_manifest(
-    manifest_df: pd.DataFrame,
-    output_dir: str | Path,
-    split_name: str,
-) -> None:
-    """Require an exact match between manifest paths and exported image files."""
-    _require_dataframe(manifest_df, f"{split_name} manifest")
-    _require_columns(
-        manifest_df, ["file_name"], dataframe_name=f"{split_name} manifest"
-    )
-    root = Path(output_dir)
-    image_dir = root / split_name / "images"
-    expected = set(manifest_df["file_name"].tolist())
-    actual = {
-        path.relative_to(root).as_posix()
-        for path in image_dir.rglob("*")
-        if path.is_file() or path.is_symlink()
-    }
-
-    missing = sorted(expected - actual, key=str)
-    unexpected = sorted(actual - expected)
-    if missing or unexpected:
-        raise ValueError(
-            f"{split_name} image directory does not match its manifest; "
-            f"missing files: {missing[:10]}, "
-            f"files not declared in manifest: {unexpected[:10]}."
-        )
-
-
-def _duplicate_digest_groups(hashes: dict[str, str]) -> list[list[str]]:
-    by_digest: dict[str, list[str]] = {}
-    for file_name, digest in hashes.items():
-        by_digest.setdefault(digest, []).append(file_name)
-    return [sorted(names) for names in by_digest.values() if len(names) > 1]
-
-
-def _image_pixel_hashes(
-    manifest_df: pd.DataFrame,
-    output_dir: Path,
-    split_name: str,
-) -> dict[str, str]:
-    from PIL import Image
-
-    hashes: dict[str, str] = {}
-    for file_name in manifest_df["file_name"]:
-        path = _resolve_image_path(output_dir, file_name, split_name)
-        with Image.open(path) as image:
-            image.load()
-            digest = hashlib.sha256()
-            digest.update(image.mode.encode("utf-8"))
-            digest.update(str(image.size).encode("ascii"))
-            digest.update(image.tobytes())
-            hashes[file_name] = digest.hexdigest()
-    return hashes
-
-
-def test_no_within_split_image_duplicates(
-    manifest_df: pd.DataFrame,
-    output_dir: str | Path,
-    split_name: str,
-    file_hashes: dict[str, str],
-) -> None:
-    """Reject differently named files with identical bytes or decoded pixels."""
-    byte_duplicates = _duplicate_digest_groups(file_hashes)
-    if byte_duplicates:
-        raise ValueError(
-            f"Found byte-identical images within {split_name}; "
-            f"examples: {byte_duplicates[:10]}."
-        )
-
-    pixel_hashes = _image_pixel_hashes(manifest_df, Path(output_dir), split_name)
-    pixel_duplicates = _duplicate_digest_groups(pixel_hashes)
-    if pixel_duplicates:
-        raise ValueError(
-            f"Found pixel-identical images within {split_name}; "
-            f"examples: {pixel_duplicates[:10]}."
-        )
-
-
-def test_no_cross_split_image_duplicates(
-    train_hashes: dict[str, str],
-    test_hashes: dict[str, str],
-) -> None:
-    """Reject byte-identical image content shared across train and test."""
-    train_by_hash = {digest: name for name, digest in train_hashes.items()}
-    test_by_hash = {digest: name for name, digest in test_hashes.items()}
-    shared_hashes = set(train_by_hash).intersection(test_by_hash)
-    if shared_hashes:
-        examples = [
-            (train_by_hash[digest], test_by_hash[digest])
-            for digest in sorted(shared_hashes)[:10]
-        ]
-        raise ValueError(
-            f"Found {len(shared_hashes)} byte-identical image(s) across train and "
-            f"test; examples: {examples}."
-        )
-
-
-def test_image_validation(
-    output_dir: str | Path,
-    target_col: str | None = None,
-    *,
-    multi_label: bool = False,
-    list_columns: Sequence[str] | None = None,
-    check_content_overlap: bool = True,
-) -> None:
-    """Run basic gatekeeper checks for exported image train/test splits.
-
-    The output directory must contain ``train.csv`` and ``test.csv``. This
-    aggregate validator checks manifest structure, scalar or list-literal target
-    coverage, safe paths, file presence, image decodability, and optionally
-    exact cross-split image duplication. Dataset-specific group, annotation,
-    source-hash, and augmentation-lineage checks remain the generated parser's
-    responsibility.
-    """
-    root = Path(output_dir)
-    train_path = root / "train.csv"
-    test_path = root / "test.csv"
-    for path in (train_path, test_path):
-        if not path.is_file():
-            raise ValueError(f"Required image manifest is missing: {path}.")
-
-    for split_name in ("train", "test"):
-        image_dir = root / split_name / "images"
-        if not image_dir.is_dir():
-            raise ValueError(f"Required image directory is missing: {image_dir}.")
-        if not any(path.is_file() for path in image_dir.rglob("*")):
-            raise ValueError(f"Required image directory is empty: {image_dir}.")
-
-    train_df = pd.read_csv(train_path)
-    test_df = pd.read_csv(test_path)
-    test_image_manifests(
-        train_df, test_df, target_col, multi_label=multi_label
-    )
-    _test_inline_list_columns(train_df, test_df, list_columns)
-    train_hashes = test_image_files(train_df, root, "train")
-    test_hashes = test_image_files(test_df, root, "test")
-    test_image_directory_matches_manifest(train_df, root, "train")
-    test_image_directory_matches_manifest(test_df, root, "test")
-    test_no_within_split_image_duplicates(train_df, root, "train", train_hashes)
-    test_no_within_split_image_duplicates(test_df, root, "test", test_hashes)
-    if check_content_overlap:
-        test_no_cross_split_image_duplicates(train_hashes, test_hashes)
-    test_augmentation_preview(root)
-
-
-def test_augmentation_preview(output_dir: str | Path) -> None:
-    """Require a valid PNG preview whenever augmentation.csv is present."""
-    from PIL import Image, UnidentifiedImageError
-
-    root = Path(output_dir)
-    if not (root / "augmentation.csv").is_file():
-        return
-    preview_path = root / "augmentation_preview.png"
-    if not preview_path.is_file():
-        raise ValueError(
-            "augmentation.csv exists but augmentation_preview.png is missing."
-        )
-    try:
-        with Image.open(preview_path) as preview:
-            if preview.format != "PNG":
-                raise ValueError("augmentation_preview.png must use PNG format.")
-            preview.verify()
-        with Image.open(preview_path) as preview:
-            preview.load()
-            if preview.width < 1 or preview.height < 1:
-                raise ValueError("augmentation_preview.png has invalid dimensions.")
-    except (OSError, UnidentifiedImageError) as exc:
-        raise ValueError(f"Unreadable augmentation preview: {exc}") from exc
-
-
 # Audio validation
 
 
@@ -835,38 +719,16 @@ def test_audio_manifests(
     *,
     multi_label: bool = False,
 ) -> None:
-    """Validate the common schema and keys of audio split manifests."""
-    test_split_schema(train_df, test_df)
-
-    for split_name, split_df in (("Training split", train_df), ("Test split", test_df)):
-        _require_columns(split_df, ["file_name"], dataframe_name=split_name)
-        if split_df["file_name"].isna().any():
-            raise ValueError(f"{split_name} contains missing file_name values.")
-        if split_df["file_name"].duplicated().any():
-            duplicates = split_df.loc[
-                split_df["file_name"].duplicated(keep=False), "file_name"
-            ].astype(str)
-            raise ValueError(
-                f"{split_name} contains duplicate file_name values: "
-                f"{duplicates.unique()[:10].tolist()}."
-            )
-
-    shared_paths = set(train_df["file_name"]).intersection(test_df["file_name"])
-    if shared_paths:
-        raise ValueError(
-            "Train and test reference the same file_name values: "
-            f"{sorted(map(str, shared_paths))[:10]}."
+    """Check manifest schemas and keys, plus optional classification targets."""
+    test_image_manifests(train_df, test_df)
+    if target_col is not None:
+        _test_manifest_target_coverage(
+            train_df, test_df, target_col, multi_label=multi_label
         )
-
-    if target_col is None:
-        return
-
-    _test_manifest_target_coverage(
-        train_df, test_df, target_col, multi_label=multi_label
-    )
 
 
 def _resolve_audio_path(output_dir: Path, file_name: object, split_name: str) -> Path:
+    """Resolve a safe audio path inside the output directory."""
     if not isinstance(file_name, str) or not file_name.strip():
         raise ValueError(f"{split_name} contains an empty or non-string file_name.")
     if "\\" in file_name:
@@ -899,9 +761,10 @@ def _resolve_audio_path(output_dir: Path, file_name: object, split_name: str) ->
         raise ValueError(f"Referenced audio is not a file: {file_name!r}.")
     return resolved
 
-
 def _has_audio_signature(path: Path, suffix: str) -> bool:
-    header = path.read_bytes()[:64]
+    """Check the file header against its declared audio format."""
+    with path.open("rb") as stream:
+        header = stream.read(64)
     if suffix == ".wav":
         return (
             len(header) >= 12
@@ -926,14 +789,16 @@ def _has_audio_signature(path: Path, suffix: str) -> bool:
         return header.startswith(b"ADIF") or (
             len(header) >= 2 and header[0] == 0xFF and header[1] & 0xF6 == 0xF0
         )
+    if suffix == ".webm":
+        return header.startswith(b"\x1a\x45\xdf\xa3") and b"webm" in header
     if suffix == ".ogg":
         return header.startswith(b"OggS")
     if suffix == ".opus":
         return header.startswith(b"OggS") and b"OpusHead" in header
     return False
 
-
 def _validate_wav_structure(path: Path, file_name: str) -> None:
+    """Open and read WAV data, requiring positive audio dimensions."""
     import wave
 
     try:
@@ -948,7 +813,6 @@ def _validate_wav_structure(path: Path, file_name: str) -> None:
             stream.readframes(stream.getnframes())
     except (EOFError, OSError, ValueError, wave.Error) as exc:
         raise ValueError(f"Unreadable audio: {file_name!r}: {exc}") from exc
-
 
 def test_audio_files(
     manifest_df: pd.DataFrame,
@@ -978,9 +842,9 @@ def test_audio_files(
             )
         if suffix == ".wav":
             _validate_wav_structure(path, file_name)
-        hashes[file_name] = hashlib.sha256(path.read_bytes()).hexdigest()
+        with path.open("rb") as stream:
+            hashes[file_name] = hashlib.file_digest(stream, "sha256").hexdigest()
     return hashes
-
 
 def test_audio_directory_matches_manifest(
     manifest_df: pd.DataFrame,
@@ -1009,18 +873,18 @@ def test_audio_directory_matches_manifest(
             f"files not declared in manifest: {unexpected[:10]}."
         )
 
-
 def test_no_within_split_audio_duplicates(
-    file_hashes: dict[str, str],
-    split_name: str,
+    file_hashes: dict[str, str], split_name: str
 ) -> None:
-    """Reject differently named, byte-identical audio files in one split."""
-    duplicates = _duplicate_digest_groups(file_hashes)
-    if duplicates:
-        raise ValueError(
-            f"Found byte-identical audio files within {split_name}; "
-            f"examples: {duplicates[:10]}."
-        )
+    """Reject different audio paths with identical file bytes within a split."""
+    paths_by_hash: dict[str, str] = {}
+    for file_name, digest in file_hashes.items():
+        if digest in paths_by_hash:
+            raise ValueError(
+                f"Found byte-identical audio files within {split_name}: "
+                f"{paths_by_hash[digest]!r} and {file_name!r}."
+            )
+        paths_by_hash[digest] = file_name
 
 
 def test_no_cross_split_audio_duplicates(
@@ -1081,8 +945,8 @@ def test_audio_validation(
         test_no_cross_split_audio_duplicates(train_hashes, test_hashes)
 
 
-# Croissant helpers
 
+# Croissant helpers
 
 def _load_croissant(json_path: str | Path) -> tuple[Path, dict]:
     path = Path(json_path)
@@ -1181,7 +1045,6 @@ def _local_distribution_path(json_path: Path, item: dict) -> Path:
 
 
 # Croissant validation
-
 
 def test_croissant_format(json_path: str | Path) -> None:
     """Require metadata that the ML Croissant library can load."""
@@ -1289,8 +1152,6 @@ def test_croissant_hashes_match_files(json_path: str | Path) -> None:
     """Require every declared SHA-256 hash to match its local file."""
     path, metadata = _load_croissant(json_path)
     for item in _distribution_entries(metadata):
-        if item.get("@type") != "cr:FileObject":
-            continue
         file_path = _local_distribution_path(path, item)
         if not file_path.is_file():
             raise ValueError(f"Distribution file does not exist: {file_path}.")
@@ -1424,21 +1285,10 @@ def test_croissant_numeric_columns_have_numeric_types(
         record_set = _record_set_by_name(metadata, split_name)
         if record_set is None:
             raise ValueError(f"Croissant record set is missing: {split_name!r}.")
-
-        # A numeric prefix does not establish a numeric column: categorical
-        # values can first occur much later in the exported split.
-        numeric_columns = None
-        for chunk in pd.read_csv(
-            _split_csv_path(path, split_name), chunksize=10_000, low_memory=False
-        ):
-            chunk_numeric = set(chunk.select_dtypes(include=["number"]).columns)
-            numeric_columns = (
-                chunk_numeric if numeric_columns is None
-                else numeric_columns & chunk_numeric
-            )
+        sample = pd.read_csv(_split_csv_path(path, split_name), nrows=1000)
         fields = _field_map(record_set)
         bad_types = []
-        for column in sorted(numeric_columns or ()):
+        for column in sample.select_dtypes(include=["number"]).columns:
             if time_col is not None and column == time_col:
                 continue
             field = fields.get(column)

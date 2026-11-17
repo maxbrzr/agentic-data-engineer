@@ -1,0 +1,158 @@
+{
+  "@graph": [
+    {
+      "@id": "https://piveau.io/set/data/1697740",
+      "dcat:landingPage": {
+        "@id": "https://www.kaggle.com/datasets/shivamb/machine-predictive-maintenance-classification"
+      },
+      "https://data.hammerhai.eu/vocab/semanticQualityNegativeScore": {
+        "@value": "0.66442599999999996108",
+        "@type": "http://www.w3.org/2001/XMLSchema#double"
+      },
+      "@type": "dcat:Dataset",
+      "https://data.hammerhai.eu/vocab/semanticQualityPositiveScore": {
+        "@value": "0.77483800000000002672",
+        "@type": "http://www.w3.org/2001/XMLSchema#double"
+      },
+      "https://data.hammerhai.eu/vocab/semanticQualityScore": {
+        "@value": "0.44262499999999999067",
+        "@type": "http://www.w3.org/2001/XMLSchema#double"
+      },
+      "dcat:keyword": [
+        {
+          "@language": "en",
+          "@value": "physics"
+        },
+        {
+          "@language": "en",
+          "@value": "multiclass classification"
+        },
+        {
+          "@language": "en",
+          "@value": "manufacturing"
+        },
+        {
+          "@language": "en",
+          "@value": "public"
+        },
+        {
+          "@language": "en",
+          "@value": "earth and nature"
+        },
+        {
+          "@language": "en",
+          "@value": "binary classification"
+        }
+      ],
+      "dcat:distribution": {
+        "@id": "https://piveau.io/set/distribution/c4747f2f-d53a-48ac-bb6b-8afe80a540e6"
+      },
+      "https://data.hammerhai.eu/vocab/descriptionFormat": {
+        "@id": "https://www.iana.org/assignments/media-types/text/html"
+      },
+      "dct:accessRights": {
+        "@id": "http://publications.europa.eu/resource/authority/access-right/PUBLIC"
+      },
+      "dct:identifier": [
+        "shivamb/machine-predictive-maintenance-classification",
+        {
+          "@value": "1697740",
+          "@type": "http://www.w3.org/2001/XMLSchema#integer"
+        }
+      ],
+      "dct:publisher": {
+        "@id": "https://www.kaggle.com"
+      },
+      "dct:provenance": {
+        "@id": "https://www.kaggle.com/datasets/shivamb/machine-predictive-maintenance-classification#provenance"
+      },
+      "dct:license": {
+        "@id": "https://spdx.org/licenses/CC0-1.0.html"
+      },
+      "dcat:theme": {
+        "@id": "http://publications.europa.eu/resource/authority/data-theme/TECH"
+      },
+      "dct:title": {
+        "@language": "en",
+        "@value": "Machine Predictive Maintenance Classification"
+      },
+      "dct:description": {
+        "@language": "en",
+        "@value": "<h3>Machine Predictive Maintenance Classification Dataset</h3>\n<p>Since real predictive maintenance datasets are generally difficult to obtain and in particular difficult to publish, we present and provide a synthetic dataset that reflects real predictive maintenance encountered in the industry to the best of our knowledge.</p>\n<p>The dataset consists of 10 000 data points stored as rows with 14 features in columns</p>\n<ul>\n<li>UID: unique identifier ranging from 1 to 10000</li>\n<li>productID: consisting of a letter L, M, or H for low (50% of all products), medium (30%), and high (20%) as product quality variants and a variant-specific serial number</li>\n<li>air temperature [K]: generated using a random walk process later normalized to a standard deviation of 2 K around 300 K</li>\n<li>process temperature [K]: generated using a random walk process normalized to a standard deviation of 1 K, added to the air temperature plus 10 K.</li>\n<li>rotational speed [rpm]: calculated from powepower of 2860 W, overlaid with a normally distributed noise</li>\n<li>torque [Nm]: torque values are normally distributed around 40 Nm with an \u00cf\u0192 = 10 Nm and no negative values.</li>\n<li>tool wear [min]: The quality variants H/M/L add 5/3/2 minutes of tool wear to the used tool in the process. and a\n'machine failure' label that indicates, whether the machine has failed in this particular data point for any of the following failure modes are true.</li>\n</ul>\n<h2>Important : There are two Targets - Do not make the mistake of using one of them as feature, as it will lead to leakage.</h2>\n<ul>\n<li>Target : Failure or Not</li>\n<li>Failure Type : Type of Failure</li>\n</ul>\n<h3>Acknowledgements</h3>\n<p>UCI : https://archive.ics.uci.edu/ml/datasets/AI4I+2020+Predictive+Maintenance+Dataset</p>"
+      },
+      "dcat:version": "1",
+      "dct:modified": {
+        "@value": "2021-11-06T02:59:26.113Z",
+        "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+      },
+      "dct:accrualPeriodicity": {
+        "@id": "http://publications.europa.eu/resource/authority/frequency/NEVER"
+      },
+      "dct:creator": {
+        "@id": "https://www.kaggle.com/shivamb"
+      }
+    },
+    {
+      "@id": "https://piveau.io/set/distribution/c4747f2f-d53a-48ac-bb6b-8afe80a540e6",
+      "dct:format": {
+        "@id": "http://publications.europa.eu/resource/authority/file-type/ZIP"
+      },
+      "dcat:byteSize": {
+        "@value": "139819",
+        "@type": "http://www.w3.org/2001/XMLSchema#nonNegativeInteger"
+      },
+      "dct:license": {
+        "@id": "https://spdx.org/licenses/CC0-1.0.html"
+      },
+      "@type": "dcat:Distribution",
+      "dct:title": {
+        "@language": "en",
+        "@value": "Complete dataset archive"
+      },
+      "dcat:downloadURL": {
+        "@id": "https://www.kaggle.com/api/v1/datasets/download/shivamb/machine-predictive-maintenance-classification"
+      },
+      "dcat:accessURL": {
+        "@id": "https://www.kaggle.com/datasets/shivamb/machine-predictive-maintenance-classification/data"
+      },
+      "dcat:mediaType": {
+        "@id": "https://www.iana.org/assignments/media-types/application/zip"
+      },
+      "dct:description": {
+        "@language": "en",
+        "@value": "ZIP archive containing all files in the current Kaggle dataset version."
+      },
+      "dct:identifier": "https://www.kaggle.com/datasets/shivamb/machine-predictive-maintenance-classification#archive"
+    },
+    {
+      "@id": "https://www.kaggle.com",
+      "@type": [
+        "foaf:Agent",
+        "foaf:Organization"
+      ],
+      "foaf:name": "Kaggle"
+    },
+    {
+      "@id": "https://www.kaggle.com/datasets/shivamb/machine-predictive-maintenance-classification#provenance",
+      "@type": "dct:ProvenanceStatement",
+      "dct:description": {
+        "@language": "en",
+        "@value": "<p>UCI ML Group</p>"
+      }
+    },
+    {
+      "@id": "https://www.kaggle.com/shivamb",
+      "foaf:name": {
+        "@language": "en",
+        "@value": "Shivam Bansal"
+      },
+      "@type": "foaf:Agent"
+    }
+  ],
+  "@context": {
+    "dct": "http://purl.org/dc/terms/",
+    "dcat": "http://www.w3.org/ns/dcat#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "foaf": "http://xmlns.com/foaf/0.1/"
+  }
+}

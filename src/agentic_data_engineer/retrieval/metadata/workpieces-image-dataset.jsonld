@@ -1,0 +1,47 @@
+{
+  "@context": {
+    "dcat": "http://www.w3.org/ns/dcat#",
+    "dct": "http://purl.org/dc/terms/",
+    "foaf": "http://xmlns.com/foaf/0.1/"
+  },
+  "@graph": [
+    {
+      "@id": "https://zenodo.org/records/16361102",
+      "@type": "dcat:Dataset",
+      "dct:title": "Workpieces image dataset",
+      "dct:description": "RGB images of machined workpiece surfaces, manually labelled by experts for surface wear and defects. Image classification example.",
+      "dcat:landingPage": {
+        "@id": "https://zenodo.org/records/16361102"
+      },
+      "dcat:distribution": {
+        "@id": "https://zenodo.org/records/16361102#distribution"
+      },
+      "dct:identifier": "10.5281/zenodo.16361102",
+      "dct:license": {
+        "@id": "https://creativecommons.org/licenses/by/4.0/"
+      },
+      "dct:creator": [
+        {
+          "@type": "foaf:Person",
+          "foaf:name": "Virginia Riego del Castillo"
+        },
+        {
+          "@type": "foaf:Person",
+          "foaf:name": "Lidia Sánchez González"
+        }
+      ]
+    },
+    {
+      "@id": "https://zenodo.org/records/16361102#distribution",
+      "@type": "dcat:Distribution",
+      "dct:title": "Workpieces image dataset",
+      "dct:format": "application/zip",
+      "dcat:accessURL": {
+        "@id": "https://zenodo.org/records/16361102"
+      },
+      "dcat:downloadURL": {
+        "@id": "https://zenodo.org/records/16361102/files/surfaces.zip?download=1"
+      }
+    }
+  ]
+}

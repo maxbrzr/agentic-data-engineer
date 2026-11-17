@@ -1,0 +1,184 @@
+{
+  "@graph": [
+    {
+      "@id": "https://doi.org/10.5281/zenodo.6364950#file-insertion-dataset.zip-checksum",
+      "spdx:checksumValue": {
+        "@value": "61029a290d4512382cd6a11e53def18a",
+        "@type": "http://www.w3.org/2001/XMLSchema#hexBinary"
+      },
+      "spdx:algorithm": {
+        "@id": "spdx:checksumAlgorithm_md5"
+      },
+      "@type": "spdx:Checksum"
+    },
+    {
+      "@id": "https://orcid.org/0000-0002-0346-7082",
+      "@type": [
+        "foaf:Person",
+        "foaf:Agent"
+      ],
+      "foaf:name": "Simoni\u010d, Mihael",
+      "org:memberOf": {
+        "@id": "https://doi.org/10.5281/zenodo.6364950#affiliation-1-1"
+      }
+    },
+    {
+      "@id": "https://doi.org/10.5281/zenodo.6364950#affiliation-1-1",
+      "foaf:name": "Jozef Stefan Institute",
+      "@type": "foaf:Organization"
+    },
+    {
+      "@id": "https://orcid.org/0000-0002-0811-5027",
+      "foaf:name": [
+        "Majcen Horvat, Matev\u017e",
+        "Majcen Horvat, Matevz"
+      ],
+      "@type": [
+        "foaf:Person",
+        "foaf:Agent"
+      ],
+      "org:memberOf": {
+        "@id": "https://doi.org/10.5281/zenodo.6364950#affiliation-2-1"
+      }
+    },
+    {
+      "@id": "https://doi.org/10.5281/zenodo.6364950#affiliation-2-1",
+      "foaf:name": "Jozef Stefan Institute",
+      "@type": "foaf:Organization"
+    },
+    {
+      "@id": "https://piveau.io/set/data/10-5281-zenodo-6364950",
+      "dcat:landingPage": {
+        "@id": "https://zenodo.org/records/6364950"
+      },
+      "dcat:keyword": [
+        {
+          "@language": "en",
+          "@value": "public"
+        },
+        {
+          "@language": "en",
+          "@value": "robotics-automation"
+        },
+        "multimodal dataset, robotics, force-torque data, RGB data",
+        {
+          "@language": "en",
+          "@value": "industrial-sensor-data"
+        }
+      ],
+      "dcat:isVersionOf": {
+        "@id": "https://doi.org/10.5281/zenodo.6364949"
+      },
+      "dct:creator": [
+        {
+          "@id": "https://orcid.org/0000-0002-0811-5027"
+        },
+        {
+          "@id": "https://orcid.org/0000-0002-0346-7082"
+        }
+      ],
+      "dct:isPartOf": [
+        {
+          "@id": "https://zenodo.org/communities/eu/"
+        },
+        {
+          "@id": "https://zenodo.org/communities/collaborate_project/"
+        }
+      ],
+      "dct:license": {
+        "@id": "https://spdx.org/licenses/CC-BY-4.0.html"
+      },
+      "https://data.hammerhai.eu/vocab/descriptionFormat": {
+        "@id": "https://www.iana.org/assignments/media-types/text/html"
+      },
+      "https://data.hammerhai.eu/vocab/semanticQualityScore": {
+        "@value": "0.37576500000000001567",
+        "@type": "http://www.w3.org/2001/XMLSchema#double"
+      },
+      "dct:identifier": [
+        "10.5281/zenodo.6364950",
+        "6364950"
+      ],
+      "https://data.hammerhai.eu/vocab/semanticQualityPositiveScore": {
+        "@value": "0.57544399999999995554",
+        "@type": "http://www.w3.org/2001/XMLSchema#double"
+      },
+      "dct:accessRights": {
+        "@id": "http://publications.europa.eu/resource/authority/access-right/PUBLIC"
+      },
+      "dct:description": "<p>The dataset consists of color images of different outcomes of the copper ring insertion task as well as the corresponding Cartesian pose of the robot end-effector and force torque data measured in the robot wrist. Data is organized into folders, representing one of four possible insertion slots from 1 to 4. In each of the folder, data is further split into 13 cases:</p>\n\n<p>- error in insertion target position ranging from -3 to 3 mm in x direction,</p>\n\n<p>- error in insertion target position ranging from -3 to 3 mm in y direction,</p>\n\n<p>- no positional error.</p>\n\n<p>Multiple attempts were made for each case.</p>\n\n<p>Each entry has unique date-time tag and comprises five files: RGB image (.jpg) and .csv files with robot reference and measured target pose in Cartesian space (positions and quaternions) and raw force-torque sensor data and force-torque data transformed to the tool frame.</p>\n\n<p>Total number of entries is 300.</p>\n\n<p>The experiments were performed with Franka Emika Panda collaborative robot. For acquisition of image data an Intel Realsense D435 RGB-D camera has been utilized. Force-torque measurements were done using ATI Nano25 sensor.</p>",
+      "dcat:theme": {
+        "@id": "http://publications.europa.eu/resource/authority/data-theme/TECH"
+      },
+      "@type": "dcat:Dataset",
+      "dct:title": "Copper Rings Insertion Attempts Dataset",
+      "dcat:distribution": {
+        "@id": "https://piveau.io/set/distribution/20371a85-12dd-45d3-80d1-424d1a3de26c"
+      },
+      "dct:publisher": {
+        "@id": "https://zenodo.org"
+      },
+      "dcat:version": "v0.1",
+      "dct:issued": {
+        "@value": "2022-03-17",
+        "@type": "http://www.w3.org/2001/XMLSchema#date"
+      },
+      "https://data.hammerhai.eu/vocab/semanticQualityNegativeScore": {
+        "@value": "0.39935799999999999077",
+        "@type": "http://www.w3.org/2001/XMLSchema#double"
+      },
+      "dct:modified": {
+        "@value": "2022-03-29",
+        "@type": "http://www.w3.org/2001/XMLSchema#date"
+      }
+    },
+    {
+      "@id": "https://piveau.io/set/distribution/20371a85-12dd-45d3-80d1-424d1a3de26c",
+      "spdx:checksum": {
+        "@id": "https://doi.org/10.5281/zenodo.6364950#file-insertion-dataset.zip-checksum"
+      },
+      "dct:identifier": "https://doi.org/10.5281/zenodo.6364950#file-insertion-dataset.zip",
+      "dcat:accessURL": {
+        "@id": "https://zenodo.org/records/6364950"
+      },
+      "@type": "dcat:Distribution",
+      "dct:title": "insertion-dataset.zip",
+      "dcat:downloadURL": {
+        "@id": "https://zenodo.org/api/records/6364950/files/insertion-dataset.zip/content"
+      },
+      "dcat:byteSize": {
+        "@value": "12140514",
+        "@type": "http://www.w3.org/2001/XMLSchema#nonNegativeInteger"
+      },
+      "dct:license": {
+        "@id": "https://spdx.org/licenses/CC-BY-4.0.html"
+      },
+      "dcat:mediaType": {
+        "@id": "https://www.iana.org/assignments/media-types/application/zip"
+      },
+      "dct:description": {
+        "@language": "en",
+        "@value": "File insertion-dataset.zip from the Zenodo dataset."
+      },
+      "dct:format": {
+        "@id": "http://publications.europa.eu/resource/authority/file-type/ZIP"
+      }
+    },
+    {
+      "@id": "https://zenodo.org",
+      "@type": [
+        "foaf:Agent",
+        "foaf:Organization"
+      ],
+      "foaf:name": "Zenodo"
+    }
+  ],
+  "@context": {
+    "dct": "http://purl.org/dc/terms/",
+    "spdx": "http://spdx.org/rdf/terms#",
+    "dcat": "http://www.w3.org/ns/dcat#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "org": "http://www.w3.org/ns/org#",
+    "foaf": "http://xmlns.com/foaf/0.1/"
+  }
+}

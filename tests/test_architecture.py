@@ -105,12 +105,12 @@ class CatalogAndRetrievalTests(unittest.TestCase):
         self.assertEqual(len(EXAMPLE_DATASETS), len(examples))
         self.assertEqual(set(EXAMPLE_DATASETS), {example.key for example in examples})
         self.assertEqual(examples[0], get_example(examples[0].key))
-        self.assertIn("floor-type-detection", EXAMPLE_DATASETS)
+        self.assertIn("Workpieces image dataset", EXAMPLE_DATASETS)
         self.assertIn("printed-paper-scratches", EXAMPLE_DATASETS)
-        self.assertIn("mimii-sound-anomaly-detection", EXAMPLE_DATASETS)
-        self.assertIn("mimii-dg", EXAMPLE_DATASETS)
+        self.assertIn("copper-rings-insertion-attempts", EXAMPLE_DATASETS)
+        self.assertIn("machine-predictive-maintenance-classification", EXAMPLE_DATASETS)
         self.assertIn("bearing", EXAMPLE_DATASETS)
-        self.assertIn("covid-19-nlp-text-classification", EXAMPLE_DATASETS)
+        self.assertIn("critical-manufacturing", EXAMPLE_DATASETS)
 
     def test_unknown_example_fails(self):
         with self.assertRaisesRegex(KeyError, "Unknown example"):
@@ -146,7 +146,7 @@ class CatalogAndRetrievalTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
-            spec = get_example("chemical-process-safety")
+            spec = get_example("printed-paper-scratches")
             result = DcatApHubRetriever(
                 dataset_factory=factory,
                 verbose=False,
@@ -191,7 +191,7 @@ class CatalogAndRetrievalTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
-            spec = get_example("mimii-dg")
+            spec = get_example("bearing")
             result = DcatApHubRetriever(
                 dataset_factory=remote_factory,
                 local_dataset_factory=local_factory,
@@ -199,7 +199,7 @@ class CatalogAndRetrievalTests(unittest.TestCase):
             ).retrieve(spec, root)
 
             self.assertEqual(1, len(local_paths))
-            self.assertEqual("mimii-dg.jsonld", local_paths[0].name)
+            self.assertEqual("mimii-dg-bearing.jsonld", local_paths[0].name)
             self.assertEqual(root / spec.key / FakeDataset.title, result.data_dir)
             self.assertEqual([(root / spec.key, False, False)], calls)
             copied = result.data_dir / "dcat-metadata.jsonld"
@@ -334,7 +334,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 config=config,
             )
 
-            result = pipeline.run("tcm-predictive-maintenance")
+            result = pipeline.run("machine-predictive-maintenance-classification")
 
             self.assertEqual("fake", result.agent.harness)
             self.assertEqual(1, len(retriever.calls))
@@ -416,8 +416,8 @@ class PipelineArchitectureTests(unittest.TestCase):
                 ),
             )
 
-            first = pipeline.run("chemical-process-safety")
-            second = pipeline.run("chemical-process-safety")
+            first = pipeline.run("printed-paper-scratches")
+            second = pipeline.run("printed-paper-scratches")
 
             self.assertNotEqual(first.agent.output_dir, second.agent.output_dir)
             self.assertTrue(first.provenance_path.is_file())
@@ -491,7 +491,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 ValueError,
                 r"Agent run 'false-success'.*train\.csv.*test\.csv",
             ):
-                pipeline.run("tcm-predictive-maintenance")
+                pipeline.run("machine-predictive-maintenance-classification")
             self.assertEqual([], metadata_generator.calls)
 
     def test_pipeline_rejects_invalid_metadata_before_agent_run(self):
@@ -520,7 +520,7 @@ class PipelineArchitectureTests(unittest.TestCase):
                 ValueError,
                 "missing Croissant source metadata",
             ):
-                pipeline.run("chemical-process-safety")
+                pipeline.run("printed-paper-scratches")
 
             self.assertEqual([], harness.calls)
 
@@ -577,7 +577,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir.mkdir()
             output_dir = root / "output"
             artifact_dir = output_dir
-            spec = get_example("industry-5-cyber-physical-systems")
+            spec = get_example("critical-manufacturing")
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=output_dir,
@@ -651,7 +651,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir = root / "data"
             data_dir.mkdir()
             artifact_dir = root / "output"
-            spec = get_example("tcm-predictive-maintenance")
+            spec = get_example("machine-predictive-maintenance-classification")
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=artifact_dir,
@@ -708,7 +708,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir = root / "data"
             data_dir.mkdir()
             output_dir = root / "output"
-            spec = get_example("tcm-predictive-maintenance")
+            spec = get_example("machine-predictive-maintenance-classification")
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=output_dir,
@@ -784,7 +784,7 @@ class OpencodeAdapterTests(unittest.TestCase):
             data_dir = root / "data"
             data_dir.mkdir()
             artifact_dir = root / "output"
-            spec = get_example("tcm-predictive-maintenance")
+            spec = get_example("machine-predictive-maintenance-classification")
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=artifact_dir,
@@ -817,7 +817,7 @@ class OpencodeAdapterTests(unittest.TestCase):
         def read_attestation(url, _expected_output):
             attestation_reads.append(url)
             return {
-                "example_key": "chemical-process-safety",
+                "example_key": "printed-paper-scratches",
                 "data_root": str(data_root),
                 "output_dir": str(artifact_dir),
                 "data_read_only": True,
@@ -842,11 +842,11 @@ class OpencodeAdapterTests(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir).resolve()
-            data_root = root / "data" / "chemical-process-safety"
+            data_root = root / "data" / "printed-paper-scratches"
             data_dir = data_root / "downloaded-package"
             data_dir.mkdir(parents=True)
-            artifact_dir = root / "output" / "chemical-process-safety"
-            spec = get_example("chemical-process-safety")
+            artifact_dir = root / "output" / "printed-paper-scratches"
+            spec = get_example("printed-paper-scratches")
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=artifact_dir,
@@ -887,21 +887,21 @@ class OpencodeAdapterTests(unittest.TestCase):
             root = Path(temp_dir).resolve()
             marker.update(
                 {
-                    "example_key": "tcm-predictive-maintenance",
+                    "example_key": "machine-predictive-maintenance-classification",
                     "data_root": str(
-                        root / "data" / "tcm-predictive-maintenance"
+                        root / "data" / "machine-predictive-maintenance-classification"
                     ),
                     "output_dir": str(
-                        root / "output" / "tcm-predictive-maintenance"
+                        root / "output" / "machine-predictive-maintenance-classification"
                     ),
                     "data_read_only": True,
                     "output_writable": True,
                 }
             )
-            data_dir = root / "data" / "chemical-process-safety"
+            data_dir = root / "data" / "printed-paper-scratches"
             data_dir.mkdir(parents=True)
-            output_dir = root / "output" / "chemical-process-safety"
-            spec = get_example("chemical-process-safety")
+            output_dir = root / "output" / "printed-paper-scratches"
+            spec = get_example("printed-paper-scratches")
             request = AgentRequest(
                 dataset=RetrievedDataset(spec, data_dir, spec.title),
                 output_dir=output_dir,
@@ -916,8 +916,8 @@ class OpencodeAdapterTests(unittest.TestCase):
 
             with self.assertRaisesRegex(
                 ValueError,
-                r"container example is 'tcm-predictive-maintenance'.*"
-                r"start chemical-process-safety",
+                r"container example is 'machine-predictive-maintenance-classification'.*"
+                r"start printed-paper-scratches",
             ):
                 harness.run(request, ModelConfig("provider", "model"))
 

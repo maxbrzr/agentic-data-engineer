@@ -79,7 +79,7 @@ file_name,original_file_name,technique,seed,parameters,brightness_factor,contras
 Paths are relative to `output_dir` and resolve to model-input references in training
 rows, including list-valued references. Leave unused parameter cells empty. Store
 `parameters` as a Python list of `[name, value]` pairs, using nested lists
-when needed. Serialize with canonical `repr()` and read with `ast.literal_eval`;
+when needed. Serialize as valid Python list literals and read with `ast.literal_eval`;
 never use dictionaries or JSON in table cells.
 Record interpolation, fill, channel handling and changed attributes. Keep named
 parameter columns for the existing preview helper; use `parameters` for additional

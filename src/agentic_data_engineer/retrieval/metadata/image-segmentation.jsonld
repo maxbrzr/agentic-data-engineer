@@ -1,0 +1,154 @@
+{
+  "@graph": [
+    {
+      "@id": "https://www.kaggle.com",
+      "@type": [
+        "foaf:Agent",
+        "foaf:Organization"
+      ],
+      "foaf:name": "Kaggle"
+    },
+    {
+      "@id": "https://piveau.io/set/distribution/8978e19a-de83-4970-9b39-ebe6a0dbb107",
+      "dct:title": {
+        "@language": "en",
+        "@value": "Complete dataset archive"
+      },
+      "dcat:mediaType": {
+        "@id": "https://www.iana.org/assignments/media-types/application/zip"
+      },
+      "dct:format": {
+        "@id": "http://publications.europa.eu/resource/authority/file-type/ZIP"
+      },
+      "dct:description": {
+        "@language": "en",
+        "@value": "ZIP archive containing all files in the current Kaggle dataset version."
+      },
+      "dct:identifier": "https://www.kaggle.com/datasets/sadhoss/vale-semantic-terrain-segmentation#archive",
+      "@type": "dcat:Distribution",
+      "dcat:byteSize": {
+        "@value": "1709357402",
+        "@type": "http://www.w3.org/2001/XMLSchema#nonNegativeInteger"
+      },
+      "dcat:downloadURL": {
+        "@id": "https://www.kaggle.com/api/v1/datasets/download/sadhoss/vale-semantic-terrain-segmentation"
+      },
+      "dcat:accessURL": {
+        "@id": "https://www.kaggle.com/datasets/sadhoss/vale-semantic-terrain-segmentation/data"
+      },
+      "dct:license": {
+        "@id": "https://spdx.org/licenses/CC0-1.0.html"
+      }
+    },
+    {
+      "@id": "https://www.kaggle.com/sadhoss",
+      "@type": "foaf:Agent",
+      "foaf:name": {
+        "@language": "en",
+        "@value": "Sadegh Hosseinpoor"
+      }
+    },
+    {
+      "@id": "https://www.kaggle.com/datasets/sadhoss/vale-semantic-terrain-segmentation#provenance",
+      "dct:description": {
+        "@language": "en",
+        "@value": "<p>Original</p>"
+      },
+      "@type": "dct:ProvenanceStatement"
+    },
+    {
+      "@id": "https://piveau.io/set/data/452430",
+      "dcat:keyword": [
+        {
+          "@language": "en",
+          "@value": "robotics"
+        },
+        {
+          "@language": "en",
+          "@value": "public"
+        },
+        {
+          "@language": "en",
+          "@value": "deep learning"
+        },
+        {
+          "@language": "en",
+          "@value": "classification"
+        },
+        {
+          "@language": "en",
+          "@value": "reinforcement learning"
+        }
+      ],
+      "https://data.hammerhai.eu/vocab/semanticQualityNegativeScore": {
+        "@value": "0.65270700000000003715",
+        "@type": "http://www.w3.org/2001/XMLSchema#double"
+      },
+      "dct:publisher": {
+        "@id": "https://www.kaggle.com"
+      },
+      "https://data.hammerhai.eu/vocab/semanticQualityScore": {
+        "@value": "0.36130000000000001004",
+        "@type": "http://www.w3.org/2001/XMLSchema#double"
+      },
+      "@type": "dcat:Dataset",
+      "dct:license": {
+        "@id": "https://spdx.org/licenses/CC0-1.0.html"
+      },
+      "dcat:version": "1",
+      "dct:title": {
+        "@language": "en",
+        "@value": "Vale - Semantic Terrain Segmentation"
+      },
+      "https://data.hammerhai.eu/vocab/semanticQualityPositiveScore": {
+        "@value": "0.68765299999999995872",
+        "@type": "http://www.w3.org/2001/XMLSchema#double"
+      },
+      "dct:accrualPeriodicity": {
+        "@id": "http://publications.europa.eu/resource/authority/frequency/NEVER"
+      },
+      "https://data.hammerhai.eu/vocab/descriptionFormat": {
+        "@id": "https://www.iana.org/assignments/media-types/text/html"
+      },
+      "dct:identifier": [
+        "sadhoss/vale-semantic-terrain-segmentation",
+        {
+          "@value": "452430",
+          "@type": "http://www.w3.org/2001/XMLSchema#integer"
+        }
+      ],
+      "dct:provenance": {
+        "@id": "https://www.kaggle.com/datasets/sadhoss/vale-semantic-terrain-segmentation#provenance"
+      },
+      "dcat:landingPage": {
+        "@id": "https://www.kaggle.com/datasets/sadhoss/vale-semantic-terrain-segmentation"
+      },
+      "dct:description": {
+        "@language": "en",
+        "@value": "<h3>Context</h3>\n<p>This dataset was captured for the purpose of segmenting and classifying the terrain based on the movability constraints of three different mobile robots, see <a href=\"https://www.duo.uio.no/handle/10852/70921\">Semantic Terrain Segmentation with an Original RGB Data Set, Targeting Elevation Differences</a>.<br />\nThe dataset aims to enable autonomous terrain segmentation and classification based on the height characteristics of the terrain.\nThe name of the dataset, <em>Vale</em>, is inspired by the capture location. Campus Do Vale, The Federal University of Rio Grande Du Sul (UFRGS), Brazil.</p>\n<h3>Content</h3>\n<p>The data within is primarily aimed for use with <a href=\"https://github.com/tensorflow/models/tree/master/research/deeplab\">Deeplabv3+</a> but can be used for any semantic image segmentation purpose.</p>\n<h4>Metadata:</h4>\n<p>Environment: Semi-urban<br />\nSource: DJI Mavic Pro<br />\nImages: 600<br />\nSize: 1920x1080 (RGB)<br />\nCamera angle: 45degrees towards the ground<br />\nAltitude: ~2 meters.<br />\nArea: Campus Do Vale UFRGS<br />\nTime of the day: Midday<br />\nCapture Date: November 20th, 2018 and May 6th, 2019<br />\nNaming: 5-digit name (ex. 03001.*), two first digits (03) correspond to origin-video the frame was extracted from. The three following digits (001) correspond to the image/frame number.</p>\n<h4>Classes:</h4>\n<p><strong>Classes</strong> | <strong>Hight characteristics</strong> | <strong>Color</strong>  | <strong>8bit code</strong><br />\n--- | ---  | --- | ---<br />\nNon-Traversable  | (200 -&gt; mm               | Red           | 4<br />\nLegged                 | (50 -&gt; 200] mm         | Orange     | 3<br />\nBelted/Tracked    | (20 -&gt; 50] mm           | Yellow       | 2<br />\nWheeled               | [0 -&gt; 20] mm             | Green        | 1</p>\n<h4>Pixel distribution with unlabelled spaces between segments</h4>\n<p><img src=\"https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F3695042%2F96f8f122abb98ad7bb21559a344a57b0%2Fvalev2_pixel_distribution_original.png?generation=1577009300284899&amp;alt=media\" alt=\"\" /></p>\n<h4>Pixel distribution with dilated segments</h4>\n<p><img src=\"https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F3695042%2Ff961ea3a3638fca5a58ae89a7385310d%2Fvalev2_pixel_distribution_filled.png?generation=1577009332159170&amp;alt=media\" alt=\"\" /></p>\n<h4>Segmentation distribution</h4>\n<p><img src=\"https://www.googleapis.com/download/storage/v1/b/kaggle-user-content/o/inbox%2F3695042%2F9ee51631a0c4317b824943a4684d481e%2FSegment_count_valev2.png?generation=1577008998518821&amp;alt=media\" alt=\"\" /></p>\n<h4>Folder:</h4>\n<ul>\n<li>json<br />\n.json with polygon outline of every class segment per frame/image</li>\n<li>mask_rgb_filled<br />\n.png masks with dilated segments to remove unlabeled pixels</li>\n<li>mask_rgb_from_json<br />\n.png masks with segments based on .json files</li>\n<li>mask_uint8_deeplab<br />\n.png filled masks, labeled with corresponding 8bit(number) code</li>\n<li>raw_images<br />\n.png raw images/frames</li>\n</ul>\n<h3>Acknowledgements</h3>\n<p>Dataset captured by:\nSadegh Hosseinpoor, Mathias Mantelli and Diego &quot;kindin&quot; Pittol.</p>\n<h4>VGG Image Annotator (VIA)</h4>\n<p><code>@inproceedings{dutta2019vgg,   author = {Dutta, Abhishek and Zisserman, Andrew},   title = {The {VIA} Annotation Software for Images, Audio and Video},   booktitle = {Proceedings of the 27th ACM International Conference on Multimedia},   series = {MM '19},   year = {2019},   isbn = {978-1-4503-6889-6/19/10},   location = {Nice, France},   numpages = {4},   url = {https://doi.org/10.1145/3343031.3350535},   doi = {10.1145/3343031.3350535},   publisher = {ACM},   address = {New York, NY, USA}, } </code></p>\n<p><code>@misc{dutta2016via,   author = &quot;Dutta, A. and Gupta, A. and Zissermann, A.&quot;,   title = &quot;{VGG} Image Annotator ({VIA})&quot;,   year = &quot;2016&quot;,     howpublished = &quot;http://www.robots.ox.ac.uk/~vgg/software/via/&quot;,     note = &quot;Version: 1.0.6, Accessed: 18/02/2019&quot;  }</code></p>\n<h4>Deeplabv3+</h4>\n<p><code>@inproceedings{deeplabv3plus2018,   title={Encoder-Decoder with Atrous Separable Convolution for Semantic Image Segmentation},   author={Liang-Chieh Chen and Yukun Zhu and George Papandreou and Florian Schroff and Hartwig Adam},   booktitle={ECCV},   year={2018} }</code></p>\n<h3>Inspiration</h3>\n<p>We hope this will be of use for the machine vision community and push for further development of the field!</p>"
+      },
+      "dct:accessRights": {
+        "@id": "http://publications.europa.eu/resource/authority/access-right/PUBLIC"
+      },
+      "dct:creator": {
+        "@id": "https://www.kaggle.com/sadhoss"
+      },
+      "dct:modified": {
+        "@value": "2019-12-21T19:30:20.830Z",
+        "@type": "http://www.w3.org/2001/XMLSchema#dateTime"
+      },
+      "dcat:distribution": {
+        "@id": "https://piveau.io/set/distribution/8978e19a-de83-4970-9b39-ebe6a0dbb107"
+      },
+      "dcat:theme": {
+        "@id": "http://publications.europa.eu/resource/authority/data-theme/TECH"
+      }
+    }
+  ],
+  "@context": {
+    "dct": "http://purl.org/dc/terms/",
+    "dcat": "http://www.w3.org/ns/dcat#",
+    "rdf": "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+    "foaf": "http://xmlns.com/foaf/0.1/"
+  }
+}

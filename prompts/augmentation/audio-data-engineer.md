@@ -115,7 +115,7 @@ file_name,original_file_name,partner_file_name,technique,seed,parameters,origina
 Paths are relative to `output_dir` and resolve to model-input references in training
 rows, including list-valued references. In Mel mode the original is its baseline matrix. Leave unused partner fields empty.
 Store `parameters` as a Python list of `[name, value]` pairs, using nested lists
-when needed. Serialize with canonical `repr()` and read with `ast.literal_eval`;
+when needed. Serialize as valid Python list literals and read with `ast.literal_eval`;
 never use dictionaries or JSON in table cells.
 Record exact operation settings, source-file hashes, known feature settings and
 RIR provenance where applicable. For local RIRs, record the source path and hash;

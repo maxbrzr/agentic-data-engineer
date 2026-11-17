@@ -188,7 +188,7 @@ Adapt the primary manifests to the selected task:
 
 Choose one coherent split-driving task and retain compatible alternative targets;
 do not add another modality or mix prediction units. Partition documents before attaching complete annotation lists. Encode
-repeated annotations with canonical `repr()` Python lists: flat values for labels
+repeated annotations as valid Python list literals: flat values for labels
 or summaries and dictionaries for structured annotations. Do not use JSON or
 create `<split>_*.csv` files.
 
