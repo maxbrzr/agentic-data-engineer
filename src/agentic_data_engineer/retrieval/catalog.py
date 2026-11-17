@@ -18,7 +18,7 @@ _EXAMPLE_DATASETS = {
         key="Vale - Semantic Terrain Segmentation",
         title="Vale - Semantic Terrain Segmentation",
         url="https://data.hammerhai.eu/de/dataset/452430",
-        metadata_resource="metadata/Vale - Semantic Terrain Segmentation.jsonld",
+        metadata_resource="metadata/image-segmentation.jsonld",
     ),
     "printed-paper-scratches": DatasetSpec(
         key="printed-paper-scratches",
