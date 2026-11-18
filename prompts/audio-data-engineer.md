@@ -236,7 +236,7 @@ Use if suitable. If the underlying task is a little bit different, keep the unde
 | --- | --- |
 | Single-label classification | Human-readable `label` |
 | Regression | Finite numeric values under the selected target name |
-| Multi-label classification | Sorted unique label list with consistent source scalar types, serialized with canonical Python `repr()` for target-coverage validation |
+| Multi-label classification | Sorted unique label list with consistent source scalar types, serialized as a valid Python list literal for target-coverage validation |
 | Whole-recording recognition, translation or synthesis | Authoritative `text`; translation uses target-language text |
 | Segmented recognition/translation | Aligned `start_time`, `end_time`, `text` lists |
 | Captioning | `text`, or `captions` lists when multiple captions exist |
@@ -272,11 +272,10 @@ the same applicable guarantees as the aggregate validator.
 
 
 For waveform export, run `test_audio_validation` from
-`agentic_data_engineer.validation`. Pass `target_col=split_target_col` only for
-ordinary closed-set classification, with `multi_label` set appropriately. For
-regression, structured targets, documented empty-label cases and open-set/anomaly
-protocols, pass `target_col=None`
-and implement task-specific checks; the generic target check assumes class coverage.
+`agentic_data_engineer.validation`. Pass `target_col=split_target_col` for
+classification or scalar anomaly labels, with `multi_label` set appropriately.
+For regression, structured targets and documented empty-label cases, pass
+`target_col=None` and implement task-specific checks.
 Pass only complete list columns to `list_columns`; validate nullable/nested metadata
 separately without replacing missing values by empty lists.
 

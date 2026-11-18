@@ -230,7 +230,7 @@ remain available; with several target candidates use distinct documented names.
 | --- | --- |
 | Single-label classification | Human-readable `label` |
 | Regression | Finite numeric values under the selected target name |
-| Multi-label classification | Sorted unique label list with consistent source scalar types, serialized with canonical Python `repr()` for target-coverage validation |
+| Multi-label classification | Sorted unique label list with consistent source scalar types, serialized as a valid Python list literal for target-coverage validation |
 | Captioning | `text`, or `captions` lists if multiple captions exist; retain source IDs/attributes |
 | Detection/instance segmentation | Aligned list columns for source object fields such as IDs, labels, boxes, masks, area, polygons, keypoints and attributes |
 | Semantic segmentation | Existing mask paths and class-value mappings, or preserved source polygons/RLE/other encodings |
@@ -268,9 +268,9 @@ preview checks where required.
 
 
 Run `test_image_validation` from `agentic_data_engineer.validation`. Pass
-`target_col=split_target_col` only for ordinary closed-set classification with
-supported non-empty labels; set `multi_label` appropriately. For regression,
-structured annotations, empty-label or open-set/anomaly protocols, pass
+`target_col=split_target_col` for classification or scalar anomaly labels;
+set `multi_label` appropriately. For regression,
+structured annotations or empty-label protocols, pass
 `target_col=None` and implement the actual task's target checks explicitly.
 Pass only complete list columns to `list_columns`; validate nullable/nested
 metadata separately without turning unknown annotations into empty lists.

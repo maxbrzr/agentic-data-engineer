@@ -442,7 +442,6 @@ def test_tabular_splits(
 
 # Image validation
 
-
 def test_image_manifests(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
@@ -464,9 +463,95 @@ def test_image_manifests(
     if shared_paths:
         raise ValueError("Train and test reference the same file_name values.")
 
-    if target_col is not None:
-        _test_manifest_target_coverage(
-            train_df, test_df, target_col, multi_label=multi_label
+    if target_col is None:
+        return
+
+    test_target_column(
+        train_df, target_col, require_non_constant=multi_label,
+        dataframe_name="Training split",
+    )
+    test_target_column(
+        test_df,
+        target_col,
+        require_non_constant=False,
+        dataframe_name="Test split",
+    )
+
+    if not multi_label:
+        return
+    else:
+        def parse_label_lists(
+            series: pd.Series, split_name: str
+        ) -> tuple[set[str | int], type]:
+            observed: set[str | int] = set()
+            element_type: type | None = None
+            for row_index, value in series.items():
+                if not isinstance(value, str):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must encode {target_col!r} "
+                        "as a Python list literal."
+                    )
+                try:
+                    labels = ast.literal_eval(value)
+                except (SyntaxError, ValueError) as exc:
+                    raise ValueError(
+                        f"{split_name} row {row_index} contains an invalid list "
+                        f"literal in "
+                        f"{target_col!r}: {value!r}."
+                    ) from exc
+                if not isinstance(labels, list) or not labels:
+                    raise ValueError(
+                        f"{split_name} row {row_index} must contain a non-empty "
+                        f"label list in {target_col!r}."
+                    )
+                row_types = {type(label) for label in labels}
+                if len(row_types) != 1 or next(iter(row_types)) not in {str, int}:
+                    raise ValueError(
+                        f"{split_name} row {row_index} must contain only strings or "
+                        f"only integers in {target_col!r}: {labels}."
+                    )
+                row_type = next(iter(row_types))
+                if element_type is None:
+                    element_type = row_type
+                elif element_type is not row_type:
+                    raise ValueError(
+                        f"{split_name} mixes string and integer label lists in "
+                        f"{target_col!r}."
+                    )
+                if row_type is str and any(not label.strip() for label in labels):
+                    raise ValueError(
+                        f"{split_name} row {row_index} contains a blank label in "
+                        f"{target_col!r}."
+                    )
+                if len(labels) != len(set(labels)):
+                    raise ValueError(
+                        f"{split_name} row {row_index} contains duplicate labels in "
+                        f"{target_col!r}: {labels}."
+                    )
+                if labels != sorted(labels):
+                    raise ValueError(
+                        f"{split_name} row {row_index} must sort labels "
+                        f"deterministically in {target_col!r}: {labels}."
+                    )
+                observed.update(labels)
+            assert element_type is not None
+            return observed, element_type
+
+        train_targets, train_type = parse_label_lists(
+            train_df[target_col], "Training split"
+        )
+        test_targets, test_type = parse_label_lists(test_df[target_col], "Test split")
+        if train_type is not test_type:
+            raise ValueError(
+                f"Train/test {target_col!r} list element types differ: "
+                f"train={train_type.__name__}, test={test_type.__name__}."
+            )
+
+    unseen_targets = test_targets - train_targets
+    if unseen_targets:
+        raise ValueError(
+            f"Test split contains {target_col!r} values not present in training: "
+            f"{sorted(map(str, unseen_targets))}."
         )
 
 
@@ -664,109 +749,7 @@ def test_augmentation_preview(output_dir: str | Path) -> None:
         raise ValueError(f"Unreadable augmentation preview: {exc}") from exc
 
 
-# Media-manifest target validation
-def _test_manifest_target_coverage(
-    train_df: pd.DataFrame,
-    test_df: pd.DataFrame,
-    target_col: str,
-    *,
-    multi_label: bool,
-) -> None:
-    """Require complete classification targets and training coverage of test labels."""
-    test_target_column(train_df, target_col, dataframe_name="Training split")
-    test_target_column(
-        test_df,
-        target_col,
-        require_non_constant=False,
-        dataframe_name="Test split",
-    )
-
-    if not multi_label:
-        train_targets = set(train_df[target_col].unique().tolist())
-        test_targets = set(test_df[target_col].unique().tolist())
-    else:
-        def parse_label_lists(
-            series: pd.Series, split_name: str
-        ) -> tuple[set[str | int], type]:
-            observed: set[str | int] = set()
-            element_type: type | None = None
-            for row_index, value in series.items():
-                if not isinstance(value, str):
-                    raise ValueError(
-                        f"{split_name} row {row_index} must encode {target_col!r} "
-                        "as a Python list literal."
-                    )
-                try:
-                    labels = ast.literal_eval(value)
-                except (SyntaxError, ValueError) as exc:
-                    raise ValueError(
-                        f"{split_name} row {row_index} contains an invalid list "
-                        f"literal in "
-                        f"{target_col!r}: {value!r}."
-                    ) from exc
-                if not isinstance(labels, list) or not labels:
-                    raise ValueError(
-                        f"{split_name} row {row_index} must contain a non-empty "
-                        f"label list in {target_col!r}."
-                    )
-                row_types = {type(label) for label in labels}
-                if len(row_types) != 1 or next(iter(row_types)) not in {str, int}:
-                    raise ValueError(
-                        f"{split_name} row {row_index} must contain only strings or "
-                        f"only integers in {target_col!r}: {labels}."
-                    )
-                row_type = next(iter(row_types))
-                if element_type is None:
-                    element_type = row_type
-                elif element_type is not row_type:
-                    raise ValueError(
-                        f"{split_name} mixes string and integer label lists in "
-                        f"{target_col!r}."
-                    )
-                if row_type is str and any(not label.strip() for label in labels):
-                    raise ValueError(
-                        f"{split_name} row {row_index} contains a blank label in "
-                        f"{target_col!r}."
-                    )
-                if len(labels) != len(set(labels)):
-                    raise ValueError(
-                        f"{split_name} row {row_index} contains duplicate labels in "
-                        f"{target_col!r}: {labels}."
-                    )
-                if labels != sorted(labels):
-                    raise ValueError(
-                        f"{split_name} row {row_index} must sort labels "
-                        f"deterministically in {target_col!r}: {labels}."
-                    )
-                if value != repr(labels):
-                    raise ValueError(
-                        f"{split_name} row {row_index} must use the canonical Python "
-                        f"list representation in {target_col!r}; expected "
-                        f"{repr(labels)!r}."
-                    )
-                observed.update(labels)
-            assert element_type is not None
-            return observed, element_type
-
-        train_targets, train_type = parse_label_lists(
-            train_df[target_col], "Training split"
-        )
-        test_targets, test_type = parse_label_lists(test_df[target_col], "Test split")
-        if train_type is not test_type:
-            raise ValueError(
-                f"Train/test {target_col!r} list element types differ: "
-                f"train={train_type.__name__}, test={test_type.__name__}."
-            )
-
-    unseen_targets = test_targets - train_targets
-    if unseen_targets:
-        raise ValueError(
-            f"Test split contains {target_col!r} values not present in training: "
-            f"{sorted(map(str, unseen_targets))}."
-        )
-
 # Audio validation
-
 
 def test_audio_manifests(
     train_df: pd.DataFrame,
@@ -776,11 +759,7 @@ def test_audio_manifests(
     multi_label: bool = False,
 ) -> None:
     """Check manifest schemas and keys, plus optional classification targets."""
-    test_image_manifests(train_df, test_df)
-    if target_col is not None:
-        _test_manifest_target_coverage(
-            train_df, test_df, target_col, multi_label=multi_label
-        )
+    test_image_manifests(train_df, test_df, target_col, multi_label=multi_label)
 
 
 def _resolve_audio_path(output_dir: Path, file_name: object, split_name: str) -> Path:
@@ -866,7 +845,12 @@ def _validate_wav_structure(path: Path, file_name: str) -> None:
                 or stream.getnframes() <= 0
             ):
                 raise ValueError("WAV contains no usable audio frames")
-            stream.readframes(stream.getnframes())
+            frames = stream.readframes(stream.getnframes())
+            expected_bytes = (
+                stream.getnframes() * stream.getnchannels() * stream.getsampwidth()
+            )
+            if len(frames) != expected_bytes:
+                raise ValueError("WAV contains incomplete audio frames")
     except (EOFError, OSError, ValueError, wave.Error) as exc:
         raise ValueError(f"Unreadable audio: {file_name!r}: {exc}") from exc
 
@@ -1000,9 +984,50 @@ def test_audio_validation(
     if check_content_overlap:
         test_no_cross_split_audio_duplicates(train_hashes, test_hashes)
 
-
-
 # Augmentation validation
+
+def test_image_augmentation_pixels(
+    output_dir: str | Path,
+    parent_paths: dict[str, Sequence[str]],
+) -> None:
+    """Reject unchanged variants and pixel-identical variants sharing a parent."""
+    from PIL import Image
+
+    root = Path(output_dir)
+    fingerprints = {}
+
+    def pixel_fingerprint(file_name: str) -> tuple:
+        if file_name not in fingerprints:
+            path = _resolve_image_path(root, file_name, "train")
+            with Image.open(path) as image:
+                image.load()
+                # Normalize ordinary color modes, preserving high-bit-depth samples.
+                if image.mode in {
+                    "1", "L", "LA", "P", "RGB", "RGBA", "CMYK", "YCbCr", "HSV",
+                }:
+                    image = image.convert("RGBA")
+                pixels = np.asarray(image)
+                fingerprints[file_name] = (
+                    image.mode, pixels.shape, str(pixels.dtype),
+                    hashlib.sha256(pixels.tobytes()).hexdigest(),
+                )
+        return fingerprints[file_name]
+
+    seen_by_parent = {}
+    for variant, parents in parent_paths.items():
+        if not parents:
+            raise ValueError(f"Variant {variant!r} has no parent images.")
+        variant_pixels = pixel_fingerprint(variant)
+        for parent in set(parents):
+            if variant_pixels == pixel_fingerprint(parent):
+                raise ValueError(f"Variant {variant!r} has unchanged pixels from {parent!r}.")
+            seen = seen_by_parent.setdefault(parent, {})
+            if variant_pixels in seen:
+                raise ValueError(
+                    f"Variants {variant!r} and {seen[variant_pixels]!r} have identical "
+                    f"pixels and share parent {parent!r}."
+                )
+            seen[variant_pixels] = variant
 
 def test_augmentation_preserves_originals(
     original_train: pd.DataFrame,

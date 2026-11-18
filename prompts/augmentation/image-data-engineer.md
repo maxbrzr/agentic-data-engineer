@@ -110,6 +110,10 @@ model-input files. Compare them with the reloaded final exports:
 - `test_augmentation_lineage`: map each audited derivative to its original parent
   and recorded parent/result hashes. Supply independently computed original and
   final training-file hashes, including retained originals.
+- `test_image_augmentation_pixels`: pass the output directory and a mapping from
+  each exported variant image path to all parent image paths, relative to the
+  output directory under `train/images/`. This rejects unchanged decoded pixels
+  and pixel-identical variants sharing a parent. Pass model-input images only.
 
 - `test_augmentation_targets`: index original and final training tables by stable
   observation keys and map each variant to all generating original observations.

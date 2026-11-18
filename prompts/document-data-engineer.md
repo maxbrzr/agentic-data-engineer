@@ -186,8 +186,10 @@ Adapt the primary manifests to the selected task:
   ordered or unordered pair semantics exactly as documented. Do not duplicate
   reversed pairs unless the source defines them as distinct observations.
 
-Choose one coherent split-driving task and retain compatible alternative targets;
-do not add another modality or mix prediction units. Partition documents before attaching complete annotation lists. Encode
+Use one of the tasks above as the split-driving task unless the dataset
+documentation explicitly specifies a different task; in that case, follow the
+documented task. Retain compatible alternative targets; do not add another
+modality or mix prediction units. Partition documents before attaching complete annotation lists. Encode
 repeated annotations as valid Python list literals: flat values for labels
 or summaries and dictionaries for structured annotations. Do not use JSON or
 create `<split>_*.csv` files.

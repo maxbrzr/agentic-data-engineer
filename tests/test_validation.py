@@ -326,7 +326,7 @@ class ImageValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid list literal"):
             validate_image_output(self.output_dir, "label", multi_label=True)
 
-    def test_json_style_string_array_is_not_canonical(self):
+    def test_multi_label_double_quoted_strings_pass(self):
         train = pd.read_csv(self.output_dir / "train.csv")
         test = pd.read_csv(self.output_dir / "test.csv")
         train["label"] = ['["paper", "scratch"]', "['clean', 'paper']"]
@@ -334,8 +334,7 @@ class ImageValidationTests(unittest.TestCase):
         train.to_csv(self.output_dir / "train.csv", index=False)
         test.to_csv(self.output_dir / "test.csv", index=False)
 
-        with self.assertRaisesRegex(ValueError, "canonical Python list"):
-            validate_image_output(self.output_dir, "label", multi_label=True)
+        validate_image_output(self.output_dir, "label", multi_label=True)
 
     def test_multi_label_element_types_must_not_be_mixed(self):
         train = pd.read_csv(self.output_dir / "train.csv")
@@ -441,12 +440,11 @@ class ImageValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing required columns.*label"):
             validate_image_output(self.output_dir, "label")
 
-    def test_constant_training_target_fails(self):
+    def test_constant_training_target_passes(self):
         train = pd.read_csv(self.output_dir / "train.csv")
         train["label"] = "scratch"
         train.to_csv(self.output_dir / "train.csv", index=False)
-        with self.assertRaisesRegex(ValueError, "constant in Training split"):
-            validate_image_output(self.output_dir, "label")
+        validate_image_output(self.output_dir, "label")
 
     def test_missing_image_fails(self):
         self._write_image("test/images/unreferenced.png", (255, 255, 0))
@@ -476,19 +474,6 @@ class ImageValidationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "byte-identical images within train"):
             validate_image_output(self.output_dir, "label")
-
-    def test_pixel_identical_images_with_different_bytes_pass(self):
-        source = self.output_dir / "train" / "images" / "red.png"
-        duplicate = self.output_dir / "train" / "images" / "red-reencoded.png"
-        with Image.open(source) as image:
-            image.save(duplicate, format="PNG", compress_level=0)
-        self.assertNotEqual(source.read_bytes(), duplicate.read_bytes())
-
-        train = pd.read_csv(self.output_dir / "train.csv")
-        train.loc[len(train)] = ["train/images/red-reencoded.png", "scratch"]
-        train.to_csv(self.output_dir / "train.csv", index=False)
-
-        validate_image_output(self.output_dir, "label")
 
     def test_path_outside_expected_split_fails(self):
         self._write_image("train/images/foreign.png", (0, 0, 255))
@@ -550,12 +535,11 @@ class ImageValidationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "escapes output_dir"):
                 validate_image_output(self.output_dir, "label")
 
-    def test_unseen_test_label_fails(self):
+    def test_unseen_scalar_test_label_passes(self):
         test = pd.read_csv(self.output_dir / "test.csv")
         test.loc[0, "label"] = "unknown"
         test.to_csv(self.output_dir / "test.csv", index=False)
-        with self.assertRaisesRegex(ValueError, "not present in training"):
-            validate_image_output(self.output_dir, "label")
+        validate_image_output(self.output_dir, "label")
 
     def test_cross_split_duplicate_content_fails(self):
         source = self.output_dir / "train" / "images" / "red.png"
