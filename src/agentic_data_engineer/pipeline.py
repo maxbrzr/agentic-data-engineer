@@ -1,4 +1,3 @@
-import csv
 import hashlib
 import json
 import re
@@ -7,6 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
+from .augmentation_output import augmentation_audit_error
 from .config import PipelineConfig
 from .contracts import (
     AgentHarness,
@@ -51,6 +51,7 @@ class DataEngineeringPipeline:
             dataset=retrieved,
             output_dir=output_dir,
             system_prompt=system_prompt,
+            data_augmentation=self.config.data_augmentation,
             task_prompt=self._build_task_prompt(
                 retrieved.data_dir,
                 output_dir,
@@ -140,20 +141,9 @@ class DataEngineeringPipeline:
             )
 
         if data_augmentation:
-            audit_path = output_dir / "augmentation.csv"
-            if not audit_path.is_file():
-                raise ValueError(
-                    "Augmentation is enabled, but augmentation.csv is missing."
-                )
-            with audit_path.open(encoding="utf-8-sig", newline="") as stream:
-                rows = csv.reader(stream)
-                header = next(rows, None)
-                has_data = any(any(cell.strip() for cell in row) for row in rows)
-            if not header or not any(cell.strip() for cell in header) or not has_data:
-                raise ValueError(
-                    "Augmentation is enabled, but augmentation.csv must contain "
-                    "a header and at least one audit entry."
-                )
+            error = augmentation_audit_error(output_dir)
+            if error:
+                raise ValueError(f"Augmentation is enabled, but {error}.")
 
     def _write_provenance(
         self,

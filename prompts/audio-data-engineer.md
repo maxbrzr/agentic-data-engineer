@@ -84,7 +84,11 @@ information and documentation in `report.md`. Do not create separate metadata
 files or calculate extra measurements merely for completeness. 
 
 **Clean with evidence.** Standardize names, dtypes, missing-value markers, units,
-paths and time formats when justified. Correct errors only when their resolution
+paths and time formats when justified. Expand abbreviations only when their meaning
+is supported by source documentation; otherwise retain the source term and document
+the uncertainty. Name physical quantities precisely and include their documented
+units in column names where applicable; never infer an undocumented unit.
+Correct errors only when their resolution
 is supported; do not rewrite transcripts, guess labels, clamp times or reject
 outliers merely because they are unusual. Mark unresolved invalid fields as missing
 and retain their raw values/status. A known empty annotation list is not missing.

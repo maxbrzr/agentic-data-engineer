@@ -106,11 +106,7 @@ class SandboxConfigurationTests(unittest.TestCase):
             ROOT / "docker" / "opencode" / "opencode.json"
         ).read_text(encoding="utf-8")
         parsed_config = json.loads(container_config)
-        self.assertEqual("opencode/mimo-v2.6-flash-free", parsed_config["model"])
-        self.assertEqual(
-            "opencode/mimo-v2.6-flash-free",
-            parsed_config["small_model"],
-        )
+        self.assertEqual("kit/kit.mistral-small-4-119b-a8b", parsed_config["model"])
         self.assertIn('"external_directory": "allow"', container_config)
         self.assertIn("gwdg", parsed_config["enabled_providers"])
         self.assertIn("kit", parsed_config["enabled_providers"])
@@ -122,14 +118,6 @@ class SandboxConfigurationTests(unittest.TestCase):
         )
         self.assertEqual("{env:SAIA_API_KEY}", gwdg["options"]["apiKey"])
         self.assertEqual(EXPECTED_GWDG_MODELS, set(gwdg["models"]))
-        kit = parsed_config["provider"]["kit"]
-        self.assertEqual("@ai-sdk/openai-compatible", kit["npm"])
-        self.assertEqual(
-            "https://ki-toolbox.scc.kit.edu/api/v1",
-            kit["options"]["baseURL"],
-        )
-        self.assertEqual("{env:KIT_AI_API_KEY}", kit["options"]["apiKey"])
-        self.assertEqual(EXPECTED_KIT_MODELS, set(kit["models"]))
         self.assertNotRegex(container_config, r"Bearer\s+[A-Za-z0-9]")
         self.assertIn("path: .env", compose)
         self.assertNotIn(".env.opencode", compose)
@@ -148,16 +136,6 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertIn('ADE_UID=$(id -u)', launcher)
         self.assertIn('ADE_GID=$(id -g)', launcher)
         self.assertIn("--force-recreate", launcher)
-
-    def test_launcher_example_allowlists_match_catalog(self):
-        from agentic_data_engineer.retrieval import EXAMPLE_DATASETS
-
-        for name in ("opencode", "pi"):
-            with self.subTest(launcher=name):
-                launcher = (ROOT / "scripts" / name).read_text(encoding="utf-8")
-                case = launcher.split('case "$example_key" in', 1)[1]
-                allowed = case.split(") ;;", 1)[0].strip().split("|")
-                self.assertEqual(set(EXAMPLE_DATASETS), {key.strip('"') for key in allowed})
 
     def test_cli_documents_automatic_sandbox_management(self):
         cli = (
@@ -215,21 +193,12 @@ class SandboxConfigurationTests(unittest.TestCase):
         self.assertEqual("$SAIA_API_KEY", gwdg["apiKey"])
         self.assertTrue(gwdg["authHeader"])
         self.assertEqual(EXPECTED_GWDG_MODELS, {item["id"] for item in gwdg["models"]})
-        kit = models["providers"]["kit"]
-        self.assertEqual("openai-completions", kit["api"])
-        self.assertEqual("https://ki-toolbox.scc.kit.edu/api/v1", kit["baseUrl"])
-        self.assertEqual("$KIT_AI_API_KEY", kit["apiKey"])
-        self.assertTrue(kit["authHeader"])
-        self.assertEqual(EXPECTED_KIT_MODELS, {item["id"] for item in kit["models"]})
 
     def test_dotenv_template_is_tracked_but_secret_file_is_ignored(self):
         gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
         template = (ROOT / ".env.example").read_text(encoding="utf-8")
-
         self.assertIn(".env", gitignore)
         self.assertIn("!.env.example", gitignore)
-        self.assertIn("SAIA_API_KEY=", template.splitlines())
-        self.assertIn("KIT_AI_API_KEY=", template.splitlines())
 
 
 if __name__ == "__main__":

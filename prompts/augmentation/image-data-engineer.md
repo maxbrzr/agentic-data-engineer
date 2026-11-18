@@ -97,6 +97,26 @@ but does not guarantee distinct-method coverage. Exclude the preview from manife
 
 ### Validate and report
 
+Run all four augmentation checks from `agentic_data_engineer.validation` explicitly;
+`test_image_validation` does not call them. Before augmentation, retain independent
+copies of both manifests and SHA-256 mappings for all original training and test
+model-input files. Compare them with the reloaded final exports:
+
+- `test_augmentation_preserves_originals`: pass the before/after manifests, stable
+  unique observation `key_columns`, and both complete test-file hash mappings.
+- `test_augmentation_audit_coverage`: derive expected changed/new file paths from
+  the before/after exports independently of the audit; compare them with audited
+  paths and all exported training model-input paths. Flatten list-valued references.
+- `test_augmentation_lineage`: map each audited derivative to its original parent
+  and recorded parent/result hashes. Supply independently computed original and
+  final training-file hashes, including retained originals.
+
+- `test_augmentation_targets`: index original and final training tables by stable
+  observation keys and map each variant to all generating original observations.
+  Pass every target column that must be preserved, including protected alternative
+  targets, and identify multi-label columns. All parents and the variant must agree
+  on known target values; multi-label targets are compared as label sets.
+
 Beyond main checks, verify count-policy/audit agreement, readable derivatives with
 correct dimensions/mode, target/annotation validity, accurate metadata and lineage.
 Require changed decoded pixels, not just re-encoding, and check for duplicate variants

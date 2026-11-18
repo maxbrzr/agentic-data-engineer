@@ -12,6 +12,7 @@ from time import monotonic, sleep
 from typing import Any
 from uuid import uuid4
 
+from ..augmentation_output import augmentation_audit_error
 from ..contracts import AgentRequest, AgentRunResult, ModelConfig
 from .provider_env import require_provider_environment
 
@@ -96,7 +97,7 @@ class PiHarness:
         final_text = ""
         run_id: str | None = None
         message_id: str | None = None
-        missing = self._missing_outputs(request.output_dir)
+        missing = self._missing_outputs(request)
 
         for continuation in range(self.settings.max_continuations + 1):
             prompt = (
@@ -137,7 +138,7 @@ class PiHarness:
             run_id = parsed_id or run_id
             message_id = parsed_message_id or message_id
             final_text = parsed_text or final_text
-            missing = self._missing_outputs(request.output_dir)
+            missing = self._missing_outputs(request)
             if not missing:
                 break
             if continuation < self.settings.max_continuations:
@@ -471,8 +472,18 @@ class PiHarness:
         require_provider_environment(self.settings.project_root, provider_id)
 
     @staticmethod
-    def _missing_outputs(output_dir: Path) -> list[str]:
-        return [name for name in REQUIRED_OUTPUTS if not (output_dir / name).is_file()]
+    def _missing_outputs(request: AgentRequest) -> list[str]:
+        missing = [
+            name for name in REQUIRED_OUTPUTS if not (request.output_dir / name).is_file()
+        ]
+        if request.data_augmentation:
+            error = augmentation_audit_error(request.output_dir)
+            if error:
+                missing.append(
+                    f"{error}; export the augmented observations in train.csv "
+                    "and record them in augmentation.csv"
+                )
+        return missing
 
     @staticmethod
     def _continuation_prompt(output_dir: Path, missing: list[str]) -> str:

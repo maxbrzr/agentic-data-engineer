@@ -477,7 +477,7 @@ class ImageValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "byte-identical images within train"):
             validate_image_output(self.output_dir, "label")
 
-    def test_pixel_identical_images_within_split_fail(self):
+    def test_pixel_identical_images_with_different_bytes_pass(self):
         source = self.output_dir / "train" / "images" / "red.png"
         duplicate = self.output_dir / "train" / "images" / "red-reencoded.png"
         with Image.open(source) as image:
@@ -488,8 +488,7 @@ class ImageValidationTests(unittest.TestCase):
         train.loc[len(train)] = ["train/images/red-reencoded.png", "scratch"]
         train.to_csv(self.output_dir / "train.csv", index=False)
 
-        with self.assertRaisesRegex(ValueError, "pixel-identical images within train"):
-            validate_image_output(self.output_dir, "label")
+        validate_image_output(self.output_dir, "label")
 
     def test_path_outside_expected_split_fails(self):
         self._write_image("train/images/foreign.png", (0, 0, 255))

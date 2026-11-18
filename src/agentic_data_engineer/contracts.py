@@ -41,6 +41,7 @@ class AgentRequest:
     output_dir: Path
     system_prompt: str
     task_prompt: str
+    data_augmentation: bool = False
 
 
 @dataclass(frozen=True, slots=True)

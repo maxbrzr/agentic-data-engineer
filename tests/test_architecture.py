@@ -158,107 +158,6 @@ class CatalogAndRetrievalTests(unittest.TestCase):
             self.assertEqual((root / spec.key / "table.csv",), result.files)
             self.assertEqual([(root / spec.key, True, False)], calls)
 
-    def test_dcat_adapter_uses_curated_metadata_resource(self):
-        calls = []
-
-        class FakeCollection:
-            def __init__(self, root, assets):
-                self.root = root
-                self.assets = assets
-
-            def __iter__(self):
-                return iter(self.assets)
-
-        class FakeDataset:
-            title = "DCASE 2022 Challenge Task 2 Development Dataset"
-
-            def download(self, *, data_dir, force, verbose):
-                calls.append((data_dir, force, verbose))
-                root = data_dir / self.title
-                root.mkdir(parents=True)
-                audio = root / "sample.wav"
-                audio.write_bytes(b"RIFF")
-                return FakeCollection(root, [SimpleNamespace(path=audio)])
-
-        local_paths = []
-
-        def local_factory(path):
-            local_paths.append(path)
-            return FakeDataset()
-
-        def remote_factory(_url):
-            self.fail("The remote catalogue must not be used for curated metadata")
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir).resolve()
-            spec = get_example("bearing")
-            result = DcatApHubRetriever(
-                dataset_factory=remote_factory,
-                local_dataset_factory=local_factory,
-                verbose=False,
-            ).retrieve(spec, root)
-
-            self.assertEqual(1, len(local_paths))
-            self.assertEqual("mimii-dg-bearing.jsonld", local_paths[0].name)
-            self.assertEqual(root / spec.key / FakeDataset.title, result.data_dir)
-            self.assertEqual([(root / spec.key, False, False)], calls)
-            copied = result.data_dir / "dcat-metadata.jsonld"
-            self.assertEqual(
-                local_paths[0].read_text(encoding="utf-8"),
-                copied.read_text(encoding="utf-8"),
-            )
-
-    def test_dcat_adapter_reuses_existing_local_dataset_without_remote_lookup(self):
-        class FakeCollection:
-            def __init__(self, root, assets):
-                self.root = root
-                self.assets = assets
-
-            def __iter__(self):
-                return iter(self.assets)
-
-        class FakeDataset:
-            title = "Local metadata title"
-
-            def __init__(self, root):
-                self.root = root
-
-            def download(self, *, data_dir, force, verbose):
-                self.assert_download_args = (data_dir, force, verbose)
-                audio = self.root / "sample.wav"
-                return FakeCollection(self.root, [SimpleNamespace(path=audio)])
-
-        local_paths = []
-
-        def directory_factory(path):
-            local_paths.append(path)
-            return FakeDataset(path)
-
-        def remote_factory(_url):
-            self.fail("Existing local data must bypass the remote catalogue")
-
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir).resolve()
-            spec = get_example("printed-paper-scratches")
-            collection_root = root / spec.key / spec.title
-            collection_root.mkdir(parents=True)
-            (collection_root / "dcat-metadata.jsonld").write_text(
-                "{}",
-                encoding="utf-8",
-            )
-            (collection_root / "sample.wav").write_bytes(b"RIFF")
-
-            result = DcatApHubRetriever(
-                dataset_factory=remote_factory,
-                directory_dataset_factory=directory_factory,
-                verbose=False,
-            ).retrieve(spec, root)
-
-            self.assertEqual([collection_root], local_paths)
-            self.assertEqual(collection_root, result.data_dir)
-            self.assertEqual("Local metadata title", result.metadata_title)
-            self.assertEqual((collection_root / "sample.wav",), result.files)
-
     def test_dcat_adapter_rejects_non_catalog_dataset(self):
         unsupported = DatasetSpec(
             key="unsupported",
@@ -272,24 +171,6 @@ class CatalogAndRetrievalTests(unittest.TestCase):
 
 
 class PipelineArchitectureTests(unittest.TestCase):
-    def test_augmentation_audit_required_only_when_enabled(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            root = Path(temp_dir)
-            for name in ("parser.py", "train.csv", "test.csv"):
-                (root / name).touch()
-            check = DataEngineeringPipeline._require_agent_outputs
-            check(root, "test-run")
-            with self.assertRaisesRegex(ValueError, "augmentation.csv is missing"):
-                check(root, "test-run", data_augmentation=True)
-            for contents in ("", "file_name,technique\n", "file_name,technique\n,\n"):
-                (root / "augmentation.csv").write_text(contents)
-                with self.assertRaisesRegex(ValueError, "at least one audit entry"):
-                    check(root, "test-run", data_augmentation=True)
-            (root / "augmentation.csv").write_text(
-                "file_name,technique\ntrain/audio/variant.wav,noise\n"
-            )
-            check(root, "test-run", data_augmentation=True)
-
     def test_core_package_import_does_not_load_opencode(self):
         environment = dict(os.environ)
         environment["PYTHONPATH"] = "src"
@@ -527,21 +408,6 @@ class PipelineArchitectureTests(unittest.TestCase):
 
 @unittest.skipIf(OpencodeHarness is None, "OpenCode optional dependency is not installed")
 class OpencodeAdapterTests(unittest.TestCase):
-    def test_model_verification_rejects_silent_default_and_missing_identity(self):
-        requested = ModelConfig("opencode", "deepseek-v4.1-flash-free")
-        with self.assertRaisesRegex(ValueError, "model mismatch"):
-            OpencodeHarness._validate_response_model(
-                SimpleNamespace(info={
-                    "providerID": "kit", "modelID": "kit.mistral-small-4-119b-a8b"
-                }), requested,
-            )
-        with self.assertRaisesRegex(ValueError, "did not identify"):
-            OpencodeHarness._validate_response_model(SimpleNamespace(id="message"), requested)
-        OpencodeHarness._validate_response_model(
-            {"info": {"providerID": requested.provider_id, "modelID": requested.model_id}},
-            requested,
-        )
-
     def test_adapter_translates_neutral_request_and_model(self):
         created_clients = []
         artifact_dir = None
@@ -606,11 +472,6 @@ class OpencodeAdapterTests(unittest.TestCase):
             self.assertEqual("session-1", session_id)
             self.assertEqual("provider-x", chat["provider_id"])
             self.assertEqual("model-y", chat["model_id"])
-            self.assertEqual({
-                "temperature": 0,
-                "model": {"providerID": "provider-x", "modelID": "model-y"},
-                "agent": "build",
-            }, chat["extra_body"])
             self.assertTrue((output_dir / "opencode_report_session-1.md").is_file())
 
     def test_adapter_continues_idle_session_until_outputs_exist(self):

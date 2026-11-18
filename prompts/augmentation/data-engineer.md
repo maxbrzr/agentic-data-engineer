@@ -128,6 +128,30 @@ refit preprocessing on derivatives. Document preprocessing settings in `report.m
 
 ### Validate and report
 
+Run all four augmentation checks from `agentic_data_engineer.validation` explicitly.
+Before augmentation, retain independent copies of both split tables and original
+training-row hashes using the documented serialization above. Compare them with
+the reloaded final exports:
+
+- `test_augmentation_preserves_originals`: pass the before/after tables and stable
+  unique observation `key_columns`. If existing columns cannot identify observations,
+  maintain temporary validation-only keys consistently across snapshots and exports;
+  do not add them to the exported schema. For file-backed evaluation, also supply
+  both complete before/after test-file SHA-256 mappings.
+- `test_augmentation_audit_coverage`: independently identify added observations,
+  map them to final row indices, and compare with audited `row_index` values and
+  all exported training row indices.
+- `test_augmentation_lineage`: use final row indices as keys, map each audited row
+  to every original parent (including parents in parameters), and align recorded
+  parent hashes with that order. Supply recorded result hashes and independently
+  computed original/final training-row hashes, including retained originals.
+
+- `test_augmentation_targets`: index original and final training tables by stable
+  observation keys and map each variant to all generating original observations.
+  Pass every target column that must be preserved, including protected alternative
+  targets, and identify multi-label columns. All parents and the variant must agree
+  on known target values; multi-label targets are compared as label sets.
+
 In addition to main checks, verify parent lineage, unchanged targets, valid units/
 ranges/dependencies, count-policy agreement and unchanged evaluation membership.
 For synthetic methods, require actual changes in exported model features, not just

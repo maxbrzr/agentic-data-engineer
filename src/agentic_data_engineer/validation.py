@@ -139,7 +139,7 @@ def test_target_column(
     require_non_constant: bool = True,
     dataframe_name: str = "DataFrame",
 ) -> None:
-    """Require a present, complete, and optionally non-constant target."""
+    """Require complete targets without blank strings, optionally non-constant."""
     _require_dataframe(df, dataframe_name)
     _require_columns(df, [target_col], dataframe_name=dataframe_name)
 
@@ -147,6 +147,10 @@ def test_target_column(
     if target.isna().any():
         raise ValueError(
             f"Target column {target_col!r} contains missing values in {dataframe_name}."
+        )
+    if any(isinstance(value, str) and not value.strip() for value in target):
+        raise ValueError(
+            f"Target column {target_col!r} contains blank labels in {dataframe_name}."
         )
     if require_non_constant and target.nunique(dropna=False) < 2:
         raise ValueError(
@@ -439,8 +443,14 @@ def test_tabular_splits(
 # Image validation
 
 
-def test_image_manifests(train_df: pd.DataFrame, test_df: pd.DataFrame) -> None:
-    """Require matching non-empty schemas and unique, complete image paths."""
+def test_image_manifests(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    target_col: str | None = None,
+    *,
+    multi_label: bool = False,
+) -> None:
+    """Check manifest schemas and keys, plus optional classification targets."""
     test_split_schema(train_df, test_df)
     for split_name, manifest in (("train", train_df), ("test", test_df)):
         _require_columns(manifest, ["file_name"], dataframe_name=split_name)
@@ -453,6 +463,11 @@ def test_image_manifests(train_df: pd.DataFrame, test_df: pd.DataFrame) -> None:
     shared_paths = set(train_df["file_name"]) & set(test_df["file_name"])
     if shared_paths:
         raise ValueError("Train and test reference the same file_name values.")
+
+    if target_col is not None:
+        _test_manifest_target_coverage(
+            train_df, test_df, target_col, multi_label=multi_label
+        )
 
 
 def _resolve_image_path(output_dir: Path, file_name: object, split_name: str) -> Path:
@@ -582,6 +597,47 @@ def test_no_cross_split_image_duplicates(
             f"Found {len(shared_hashes)} byte-identical image(s) across train and "
             f"test; examples: {examples}."
         )
+
+def test_image_validation(
+    output_dir: str | Path,
+    target_col: str | None = None,
+    *,
+    multi_label: bool = False,
+    list_columns: Sequence[str] | None = None,
+    check_content_overlap: bool = True,
+) -> None:
+    """Run generic gatekeeper checks for exported image train/test splits."""
+    root = Path(output_dir)
+    train_path = root / "train.csv"
+    test_path = root / "test.csv"
+    for path in (train_path, test_path):
+        if not path.is_file():
+            raise ValueError(f"Required image manifest is missing: {path}.")
+
+    for split_name in ("train", "test"):
+        image_dir = root / split_name / "images"
+        if not image_dir.is_dir():
+            raise ValueError(f"Required image directory is missing: {image_dir}.")
+        if not any(path.is_file() for path in image_dir.rglob("*")):
+            raise ValueError(f"Required image directory is empty: {image_dir}.")
+
+    train_df = pd.read_csv(train_path)
+    test_df = pd.read_csv(test_path)
+    test_image_manifests(
+        train_df, test_df, target_col, multi_label=multi_label
+    )
+    _test_inline_list_columns(train_df, test_df, list_columns)
+    train_hashes = test_image_files(train_df, root, "train")
+    test_hashes = test_image_files(test_df, root, "test")
+    test_image_directory_matches_manifest(train_df, root, "train")
+    test_image_directory_matches_manifest(test_df, root, "test")
+    test_no_within_split_image_duplicates(train_hashes, "train")
+    test_no_within_split_image_duplicates(test_hashes, "test")
+    if check_content_overlap:
+        test_no_cross_split_image_duplicates(train_hashes, test_hashes)
+
+    test_augmentation_preview(root)
+
 
 def test_augmentation_preview(output_dir: str | Path) -> None:
     """Require a valid PNG preview whenever augmentation.csv is present."""
@@ -944,6 +1000,185 @@ def test_audio_validation(
     if check_content_overlap:
         test_no_cross_split_audio_duplicates(train_hashes, test_hashes)
 
+
+
+# Augmentation validation
+
+def test_augmentation_preserves_originals(
+    original_train: pd.DataFrame,
+    original_test: pd.DataFrame,
+    augmented_train: pd.DataFrame,
+    current_test: pd.DataFrame,
+    *,
+    key_columns: Sequence[str],
+    original_test_hashes: dict[str, str] | None = None,
+    current_test_hashes: dict[str, str] | None = None,
+) -> None:
+    """Require retained training originals, added rows and unchanged evaluation.
+
+    Keys must identify observations consistently before and after augmentation.
+    For file-backed evaluation, pass both complete path-to-SHA-256 mappings.
+    """
+    columns = list(key_columns)
+    if not columns:
+        raise ValueError("At least one observation key column is required.")
+    for name, frame in (
+        ("Original training", original_train),
+        ("Augmented training", augmented_train),
+        ("Original test", original_test),
+        ("Current test", current_test),
+    ):
+        _require_dataframe(frame, name)
+        _require_columns(frame, columns, dataframe_name=name)
+        if frame[columns].isna().any().any() or frame.duplicated(columns).any():
+            raise ValueError(f"{name} observation keys must be complete and unique.")
+
+    if list(original_train.columns) != list(augmented_train.columns):
+        raise ValueError("Augmentation changed the training column schema.")
+    before = original_train.set_index(columns)
+    after = augmented_train.set_index(columns)
+    if not before.index.isin(after.index).all():
+        raise ValueError("Augmentation removed original training observations.")
+    if len(after) <= len(before):
+        raise ValueError("Augmentation must add training observations.")
+    try:
+        pd.testing.assert_frame_equal(
+            before, after.loc[before.index], check_dtype=False, check_exact=True
+        )
+        pd.testing.assert_frame_equal(original_test, current_test, check_exact=True)
+    except AssertionError as exc:
+        raise ValueError(f"Augmentation changed original observations: {exc}") from exc
+
+    if original_test_hashes != current_test_hashes:
+        raise ValueError("Evaluation file paths or SHA-256 hashes changed.")
+
+
+def test_augmentation_audit_coverage(
+    expected_keys: Sequence[str | int],
+    audited_keys: Sequence[str | int],
+    exported_training_keys: Sequence[str | int],
+) -> None:
+    """Require exactly one audit entry per expected variant or changed file.
+
+    Pass observation keys for row audits, or flattened file paths for file audits.
+    Derive expected keys independently from the before/after export comparison.
+    """
+    expected = set(expected_keys)
+    audited = set(audited_keys)
+    exported = set(exported_training_keys)
+    if not expected:
+        raise ValueError("No augmented observations or changed files were supplied.")
+    if len(audited) != len(audited_keys):
+        raise ValueError("Augmentation audit contains duplicate entries.")
+    if expected != audited:
+        raise ValueError(
+            "Augmentation audit does not match generated variants; "
+            f"missing: {sorted(expected - audited, key=str)[:10]}, "
+            f"unexpected: {sorted(audited - expected, key=str)[:10]}."
+        )
+    if not audited <= exported:
+        raise ValueError("Augmentation audit references items outside training.")
+
+
+def test_augmentation_lineage(
+    parent_keys: dict[str | int, Sequence[str | int]],
+    recorded_parent_hashes: dict[str | int, Sequence[str]],
+    recorded_result_hashes: dict[str | int, str],
+    original_training_hashes: dict[str | int, str],
+    exported_training_hashes: dict[str | int, str],
+) -> None:
+    """Check all audited parents and results against independently computed hashes.
+
+    Mappings are keyed by variant. Parent lists include the original, Mixup
+    partners and any additional parents from audit parameters, in the same order
+    as their recorded hashes. Use file SHA-256 or the documented row serialization.
+    """
+    variants = set(parent_keys)
+    if (
+        not variants
+        or variants != set(recorded_parent_hashes)
+        or variants != set(recorded_result_hashes)
+    ):
+        raise ValueError("Lineage and recorded hashes must cover the same variants.")
+    if variants & set(original_training_hashes):
+        raise ValueError("Variants must have distinct keys from original training items.")
+    for variant, parents in parent_keys.items():
+        hashes = recorded_parent_hashes[variant]
+        if not parents or len(parents) != len(hashes):
+            raise ValueError(f"Incomplete parent references or hashes for {variant!r}.")
+        for parent, recorded_hash in zip(parents, hashes):
+            if parent not in original_training_hashes:
+                raise ValueError(f"Parent {parent!r} is not an original training item.")
+            expected_hash = original_training_hashes[parent]
+            if parent not in exported_training_hashes:
+                raise ValueError(f"Original parent {parent!r} is missing from training.")
+            if (
+                recorded_hash != expected_hash
+                or exported_training_hashes[parent] != expected_hash
+            ):
+                raise ValueError(f"Parent hash mismatch for {parent!r}.")
+        if variant not in exported_training_hashes:
+            raise ValueError(f"Audited variant {variant!r} is missing from training.")
+        if recorded_result_hashes[variant] != exported_training_hashes[variant]:
+            raise ValueError(f"Result hash mismatch for {variant!r}.")
+
+
+def test_augmentation_targets(
+    original_train: pd.DataFrame,
+    augmented_train: pd.DataFrame,
+    parent_keys: dict[str | int, Sequence[str | int]],
+    target_columns: Sequence[str],
+    *,
+    multi_label_columns: Sequence[str] = (),
+) -> None:
+    """Require variants and all their original parents to share protected targets.
+
+    Index both tables by stable observation keys. Map each variant to every
+    generating parent. Multi-label columns accept lists or Python list literals
+    and compare label sets. Protected target values must be known.
+    """
+    targets = list(target_columns)
+    multi_label = set(multi_label_columns)
+    if not targets or not parent_keys or not multi_label <= set(targets):
+        raise ValueError("Supply variants, protected targets and matching multi-label columns.")
+    for name, frame in (("Original training", original_train), ("Augmented training", augmented_train)):
+        _require_dataframe(frame, name)
+        _require_columns(frame, targets, dataframe_name=name)
+        if not frame.index.is_unique or frame.index.to_frame(index=False).isna().any().any():
+            raise ValueError(f"{name} observation keys must be complete and unique.")
+        test_unique_columns(frame, name)
+
+    # Normalize only label sets; scalar targets retain their original values.
+    def target_value(value, column):
+        if column in multi_label:
+            if isinstance(value, str):
+                try:
+                    value = ast.literal_eval(value)
+                except (ValueError, SyntaxError) as exc:
+                    raise ValueError(f"Invalid label list in {column!r}.") from exc
+            if not isinstance(value, list):
+                raise ValueError(f"Expected a label list in {column!r}.")
+            if any(not pd.api.types.is_scalar(label) or pd.isna(label) for label in value):
+                raise ValueError(f"Unknown or non-scalar label in {column!r}.")
+            return frozenset(value)
+        if not pd.api.types.is_scalar(value) or pd.isna(value):
+            raise ValueError(f"Unknown or non-scalar target in {column!r}.")
+        return value
+
+    for variant, parents in parent_keys.items():
+        if variant in original_train.index or variant not in augmented_train.index:
+            raise ValueError(f"Variant {variant!r} must be a new exported training observation.")
+        if not parents or any(parent not in original_train.index for parent in parents):
+            raise ValueError(f"Variant {variant!r} requires original training parents.")
+        for column in targets:
+            result = target_value(augmented_train.at[variant, column], column)
+            for parent in parents:
+                expected = target_value(original_train.at[parent, column], column)
+                if result != expected:
+                    raise ValueError(
+                        f"Target {column!r} differs between variant {variant!r} "
+                        f"and parent {parent!r}."
+                    )
 
 
 # Croissant helpers

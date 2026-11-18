@@ -7,6 +7,7 @@ from typing import Any
 
 from opencode_ai import Opencode
 
+from ..augmentation_output import augmentation_audit_error
 from ..contracts import AgentRequest, AgentRunResult, ModelConfig
 from .opencode_logging import save_session_messages, watch_session_events
 from .opencode_sandbox import (
@@ -92,7 +93,7 @@ class OpencodeHarness:
         session = client.session.create()
         response: Any = None
         event_attempt = 0
-        missing = self._missing_outputs(request.output_dir)
+        missing = self._missing_outputs(request)
 
         try:
             for continuation in range(self.settings.max_continuations + 1):
@@ -126,8 +127,6 @@ class OpencodeHarness:
                             system=request.system_prompt,
                             timeout=self.settings.timeout_seconds,
                             parts=[{"type": "text", "text": prompt}],
-                            # The Python SDK still serializes legacy top-level
-                            # modelID/providerID. Current OpenCode expects model.
                             extra_body={
                                 **dict(model.parameters),
                                 "model": {
@@ -170,7 +169,7 @@ class OpencodeHarness:
                         self._join_watcher(watcher)
                         break
 
-                missing = self._missing_outputs(request.output_dir)
+                missing = self._missing_outputs(request)
                 if not missing:
                     break
                 if continuation < self.settings.max_continuations:
@@ -365,10 +364,18 @@ class OpencodeHarness:
             )
 
     @staticmethod
-    def _missing_outputs(output_dir) -> list[str]:
-        return [
-            name for name in REQUIRED_OUTPUTS if not (output_dir / name).is_file()
+    def _missing_outputs(request: AgentRequest) -> list[str]:
+        missing = [
+            name for name in REQUIRED_OUTPUTS if not (request.output_dir / name).is_file()
         ]
+        if request.data_augmentation:
+            error = augmentation_audit_error(request.output_dir)
+            if error:
+                missing.append(
+                    f"{error}; export the augmented observations in train.csv "
+                    "and record them in augmentation.csv"
+                )
+        return missing
 
     @staticmethod
     def _continuation_prompt(output_dir, missing: list[str]) -> str:
