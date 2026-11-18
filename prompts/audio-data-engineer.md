@@ -279,6 +279,14 @@ For regression, structured targets and documented empty-label cases, pass
 Pass only complete list columns to `list_columns`; validate nullable/nested metadata
 separately without replacing missing values by empty lists.
 
+The waveform validator checks for non-empty manifests and audio directories,
+matching column names, order and dtypes, and complete, unique file references.
+It checks path safety, exact directory coverage, supported audio extensions and
+matching file signatures. WAV files must have a readable header, positive
+channel count, sample rate, sample width and frame count, and all declared audio
+frames must be readable. Keep `check_content_overlap=True` to reject byte-identical
+files across train and test. Within-split byte duplicates are always rejected.
+
 For Mel export, run equivalent schema/path/coverage checks outside `parser.py`;
 the audio gatekeeper cannot read `.npy` manifests. Load with `allow_pickle=False`
 and check finite non-empty numeric arrays and consistency with documented shapes,
