@@ -1,4 +1,5 @@
 import tempfile
+import textwrap
 import unittest
 import wave
 from pathlib import Path
@@ -8,6 +9,7 @@ import pandas as pd
 from PIL import Image
 
 from agentic_data_engineer.validation import (
+    test_parser_interface as validate_parser_interface,
     test_audio_validation as validate_audio_output,
     test_image_validation as validate_image_output,
     test_chronological_split,
@@ -42,6 +44,76 @@ def classification_splits() -> tuple[pd.DataFrame, pd.DataFrame]:
         }
     )
     return train, test
+
+
+class ParserInterfaceTests(unittest.TestCase):
+    def check_parser(self, source):
+        with tempfile.TemporaryDirectory() as directory:
+            parser_path = Path(directory) / "parser.py"
+            parser_path.write_text(textwrap.dedent(source))
+            validate_parser_interface(parser_path, directory, "label")
+
+    # This fixture also checks that postponed annotations are accepted.
+    valid_parser = """\
+        from __future__ import annotations
+        import pandas as pd
+
+        def parse(data_dir: str, target_col: str) -> pd.DataFrame:
+            return pd.DataFrame({target_col: [0, 1, 0, 1]})
+
+        def split(df, target_col):
+            return df.iloc[:2].copy(), df.iloc[2:].copy()
+    """
+
+    def test_valid_parser_passes(self):
+        self.check_parser(self.valid_parser)
+
+    def test_missing_functions_fail(self):
+        for name in ("parse", "split"):
+            with self.subTest(function=name):
+                source = self.valid_parser.replace(f"def {name}(", f"def unused_{name}(")
+                with self.assertRaisesRegex(ValueError, f"must define a {name}"):
+                    self.check_parser(source)
+
+    def test_wrong_parse_signature_fails(self):
+        for signature in (
+            "data_dir: str",
+            "data_dir: str, target_col: str, extra=None",
+            "data_dir: str, *, target_col: str",
+        ):
+            with self.subTest(signature=signature):
+                source = self.valid_parser.replace("data_dir: str, target_col: str", signature)
+                with self.assertRaisesRegex(ValueError, "Expected parse"):
+                    self.check_parser(source)
+
+    def test_wrong_parse_annotations_fail(self):
+        for old, new in (("data_dir: str", "data_dir: int"),
+                         ("target_col: str", "target_col"),
+                         ("-> pd.DataFrame", "-> list")):
+            with self.subTest(annotation=new):
+                with self.assertRaisesRegex(ValueError, "Expected parse"):
+                    self.check_parser(self.valid_parser.replace(old, new))
+
+    def test_parse_must_return_dataframe(self):
+        source = self.valid_parser.replace(
+            "return pd.DataFrame({target_col: [0, 1, 0, 1]})", "return [0, 1]"
+        )
+        with self.assertRaisesRegex(ValueError, "parse.*must return"):
+            self.check_parser(source)
+
+    def test_split_must_accept_dataframe_and_target(self):
+        source = self.valid_parser.replace("def split(df, target_col)", "def split(df)")
+        with self.assertRaisesRegex(ValueError, "split.*must accept"):
+            self.check_parser(source)
+
+    def test_split_must_return_two_dataframes(self):
+        for result in ("df", "(df,)", "(df, df, df)", "(df, None)"):
+            with self.subTest(result=result):
+                source = self.valid_parser.replace(
+                    "return df.iloc[:2].copy(), df.iloc[2:].copy()", f"return {result}"
+                )
+                with self.assertRaisesRegex(ValueError, "split.*must return"):
+                    self.check_parser(source)
 
 
 class DataFrameValidationTests(unittest.TestCase):

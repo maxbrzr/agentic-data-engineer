@@ -1,9 +1,12 @@
 import ast
 import csv
 import hashlib
+import importlib.util
+import inspect
 import json
 from collections.abc import Sequence
 from pathlib import Path
+from typing import get_type_hints
 from urllib.parse import urlparse
 
 import numpy as np
@@ -38,6 +41,53 @@ SUPPORTED_AUDIO_EXTENSIONS = {
     ".wav",
     ".webm",
 }
+
+
+# Parser validation
+
+
+def test_parser_interface(
+    parser_path: str | Path, data_dir: str | Path, target_col: str,
+) -> None:
+    """Load and execute a parser to check its parse/split interface."""
+    spec = importlib.util.spec_from_file_location("dataset_parser", parser_path)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"Cannot load parser: {parser_path}")
+    parser = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(parser)
+
+    for name in ("parse", "split"):
+        if not inspect.isfunction(getattr(parser, name, None)):
+            raise ValueError(f"Parser must define a {name}() function.")
+
+    # Require the documented parse signature, including resolved annotations.
+    parameters = list(inspect.signature(parser.parse).parameters.values())
+    if [parameter.name for parameter in parameters] != ["data_dir", "target_col"] or any(
+        parameter.kind != inspect.Parameter.POSITIONAL_OR_KEYWORD
+        for parameter in parameters
+    ):
+        raise ValueError("Expected parse(data_dir: str, target_col: str) -> pd.DataFrame.")
+    try:
+        annotations = get_type_hints(parser.parse)
+    except (NameError, TypeError) as exc:
+        raise ValueError("Cannot resolve parse() annotations.") from exc
+    if annotations != {"data_dir": str, "target_col": str, "return": pd.DataFrame}:
+        raise ValueError("Expected parse(data_dir: str, target_col: str) -> pd.DataFrame.")
+
+    parsed = parser.parse(str(data_dir), target_col)
+    if not isinstance(parsed, pd.DataFrame):
+        raise ValueError("parse() must return a pandas DataFrame.")
+
+    # Split parameter names are flexible, but both inputs must be accepted.
+    try:
+        inspect.signature(parser.split).bind(parsed, target_col)
+    except TypeError as exc:
+        raise ValueError("split() must accept a DataFrame and target column.") from exc
+    result = parser.split(parsed, target_col)
+    if not isinstance(result, tuple) or len(result) != 2 or not all(
+        isinstance(frame, pd.DataFrame) for frame in result
+    ):
+        raise ValueError("split() must return (train_df, test_df) as two DataFrames.")
 
 
 # DataFrame validation
